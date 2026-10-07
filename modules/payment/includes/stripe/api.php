@@ -3,6 +3,7 @@
 namespace ParkingManagement\API;
 
 use Booking\Order;
+use Booking\Site;
 use Exception;
 use ParkingManagement\Logger;
 use ParkingManagement\PaymentID;
@@ -20,7 +21,6 @@ use WP_REST_Server;
 class StripeAPI extends API
 {
 	private const rest_base = '/stripe/webhook';
-	private const ALLOWED_KINDS = ['booking', 'valet'];
 
 	public function __construct()
 	{
@@ -35,6 +35,7 @@ class StripeAPI extends API
 				'callback' => [$this, 'create_item'],
 				'permission_callback' => '__return_true',
 				'args' => [
+					'site_id' => ['required' => false],
 					'any_param' => ['required' => false]
 				]
 			]
@@ -49,23 +50,17 @@ class StripeAPI extends API
 	 */
 	public function create_item($request): WP_Error|WP_REST_Response
 	{
-		$kind = $request->get_param('kind');
-		if ($kind === null || !in_array($kind, self::ALLOWED_KINDS, true)) {
-			Logger::error("stripe.api.create_item", ["message" => "missing or invalid kind"]);
+		$site_id = $request->get_param('site_id');
+		$site = $site_id !== null ? Site::find($site_id) : null;
+		if ($site === null) {
+			Logger::error("stripe.api.create_item", ["message" => "missing or invalid site_id"]);
 			return new WP_Error(
 				'stripe-notification-error',
 				'Invalid request',
 				array('status' => WP_Http::BAD_REQUEST)
 			);
 		}
-		$pm = getParkingManagementInstance();
-		if (!$pm)
-			return new WP_Error(
-				'get-parking-management-instance',
-				__('failed to get parking management instance', 'parking-management'),
-				array('status' => WP_Http::BAD_REQUEST)
-			);
-		$payment = $pm->prop($kind)['payment'];
+		$payment = $site['payment'];
 		$provider = $payment['properties']['stripe'];
 		$test_enabled = ($payment['active-test'] == '1');
 		$secretKey = $test_enabled ? $provider['secret_key_test']['value'] : $provider['secret_key']['value'];
@@ -89,16 +84,16 @@ class StripeAPI extends API
 			Logger::info('stripe.create_item', [
 				'event_type' => $event->type,
 				'event_id' => $event->id,
-				'kind' => $kind,
+				'site_id' => $site_id,
 			]);
 			if ( $event->type === 'checkout.session.completed')
 			{
 				$session = $event->data->object;
 
 				$session = Session::constructFrom($session->toArray());
-				if ($session->metadata['kind'] == $kind) {
+				if (isset($session->metadata['id_commande'])) {
 					$order_id = (int)$session->metadata['id_commande'];
-					$order = new Order($kind);
+					$order = new Order();
 					if ($session->payment_status == 'paid') {
 						$payment_date = $date = date('Y-m-d H:i:s');
 						$amount = $session->amount_total / 100;

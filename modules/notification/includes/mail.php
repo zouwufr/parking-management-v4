@@ -8,14 +8,8 @@ use PHPMailer\PHPMailer\PHPMailer;
 
 class Mail
 {
-	public static function send($kind, $to, $subject, $message, $additional_headers = '', $charset = 'UTF-8', $attachmentPaths = [], $isHTML = true): bool
+	public static function send(array $mailConfig, $to, $subject, $message, $additional_headers = '', $charset = 'UTF-8', $attachmentPaths = [], $isHTML = true): bool
 	{
-		$pm = getParkingManagementInstance();
-		if (!$pm) {
-			Logger::error("mail.send", "failed to find parking management instance");
-			return false;
-		}
-		$mailConfig = $pm->prop('notification')['mail'];
 		if (
 			empty($mailConfig['host']['value'])
 			|| empty($mailConfig['login']['value'])

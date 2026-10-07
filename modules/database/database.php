@@ -7,10 +7,10 @@ use wpdb;
 
 class database {
 
-	private static array $error;
+	private static array $error = [];
 
 	// TODO: Add a test connection
-	public static function connect(string $kind): bool|wpdb
+	public static function connect(): bool|wpdb
 	{
 		$pm = getParkingManagementInstance();
 		if (!$pm) {
@@ -21,10 +21,7 @@ class database {
 			Logger::error("database.connect", self::$error);
 			return false;
 		}
-		$database = match ($kind) {
-			'valet', 'booking' => $pm->prop($kind)['database'],
-			default => []
-		};
+		$database = $pm->prop('database');
 		if (empty($database)
 			|| (!array_key_exists('host', $database)) || empty($database['host'])
 			|| (!array_key_exists('port', $database)) || empty($database['port'])

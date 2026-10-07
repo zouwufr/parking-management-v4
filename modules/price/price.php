@@ -2,18 +2,17 @@
 
 namespace ParkingManagement;
 
-use Booking\Airport;
 use Booking\Order;
 use Booking\ParkingType;
+use Booking\Site;
 use Booking\VehicleType;
-use DateTime;
 use Exception;
+use InvalidArgumentException;
 use ParkingManagement\API\PriceAPI;
 use ParkingManagement\database\database;
 use ParkingManagement\interfaces\IParkingmanagement;
 use ParkingManagement\interfaces\IShortcode;
 use Price\Page;
-use stdClass;
 use WP_REST_Request;
 
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "price" . DS . "includes" . DS . "page.php";
@@ -23,7 +22,6 @@ require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "price" . DS . "includes" . DS . "
 class Price implements IShortcode, IParkingmanagement
 {
 	private ParkingManagement $pm;
-	private string $kind;
 
 	public function __construct(ParkingManagement $pm)
 	{
@@ -34,8 +32,12 @@ class Price implements IShortcode, IParkingmanagement
 	{
 		try {
 			$this->enqueue();
+			$site = Site::current();
+			if ($site === null) {
+				return '';
+			}
 			$page = new Page($this->pm);
-			$page->setKind($this->kind);
+			$page->setSite($site);
 			return Html::_div(array('class' => 'container-md mt-5'),
 				$page->table(),
 			);
@@ -53,11 +55,15 @@ class Price implements IShortcode, IParkingmanagement
 	public function getPrice(array|WP_REST_Request $data): array
 	{
 		try {
+			$site_id = $this->getData($data, 'site_id');
+			$site = !empty($site_id) ? Site::find($site_id) : Site::defaultSite();
+			if ($site === null) {
+				Logger::error("price.getPrice", ['message' => 'no site configured']);
+				return array();
+			}
 
-			$pm = $this->pm;
-			$info = $pm->prop('info');
-			$form = $pm->prop('form');
-			$high_season = $pm->prop('high_season');
+			$form = $site['form'];
+			$high_season = $site['high_season'];
 
 			// Extract and validate dates
 			$start = substr($this->getData($data, 'depart'), 0, 10);
@@ -84,9 +90,9 @@ class Price implements IShortcode, IParkingmanagement
 
 			$realNumberOfDay = $numberOfDay = Order::nbRealDay($start, $end);
 			// Get lot availability
-			$siteId = Order::getSiteID($info['terminal']);
-			$maxLot = Booked::getMaxLot($this->kind, $start, $end, $siteId);
-			$usedLot = Booked::usedLot($this->kind, $start, $end, $siteId);
+			$siteId = Order::getSiteID($site['airport']);
+			$maxLot = Booked::getMaxLot($start, $end, $siteId);
+			$usedLot = Booked::usedLot($start, $end, $siteId);
 			$maxUsedLot = max($usedLot);
 
 			Logger::info("price.getPrice.lots", [
@@ -120,7 +126,7 @@ class Price implements IShortcode, IParkingmanagement
 				'options' => array(),
 			);
 
-			if (Booked::is($start) || Booked::is($end)) {
+			if (Booked::is($start, $site) || Booked::is($end, $site)) {
 				Logger::info("price.getPrice.booked", [
 					'start_booked' => Booked::is($start),
 					'end_booked' => Booked::is($end)
@@ -137,40 +143,34 @@ class Price implements IShortcode, IParkingmanagement
 			}
 			$type_id = VehicleType::fromInt((int)$type_id);
 
-			$site_id = Order::getSiteID($info['terminal'])->value;
-			$parking_type = ParkingType::fromInt((int)$this->getData($data, 'parking_type'));
-
-			if ($type_id == VehicleType::TRUCK) {
-				$parking_type = ParkingType::OUTSIDE;
-			}
-			if ($type_id == VehicleType::MOTORCYCLE) {
-				$parking_type = ParkingType::INSIDE;
-			}
+			$parking_type = $this->resolveParkingType($data, $site, $type_id);
+			$vehicleKey = strtolower($type_id->name);
+			$parkingKey = self::parkingTypeKey($parking_type);
+			$tariff = $site['tariffs'][$vehicleKey][$parkingKey] ?? [];
 
 			Logger::info("price.getPrice.types", [
+				'site_id' => $site['id'],
 				'vehicle_type' => $type_id->name,
 				'parking_type' => $parking_type->name,
-				'site_id' => $site_id
 			]);
 
-			// Get price grid
-			try {
-				$priceGrid = $this->priceGrid(Order::getSiteID($info['terminal']), $numberOfDay, $start, $end, $type_id, $parking_type);
-				$priceGrid = unserialize($priceGrid['grille']);
-			} catch (Exception $e) {
-				Logger::error("price.getPrice.priceGrid", [
-					'error' => $e->getMessage()
+			if (empty($tariff)) {
+				Logger::error("price.getPrice.tariff", [
+					'site_id' => $site['id'],
+					'vehicle_type' => $vehicleKey,
+					'parking_type' => $parkingKey,
+					'message' => 'no tariff configured for this combination',
 				]);
 				return [];
 			}
 
 			// Calculate base price
-			if (!empty($priceGrid[$site_id][$type_id->value][$parking_type->value][$numberOfDay])) {
-				$total = $priceGrid[$site_id][$type_id->value][$parking_type->value][$numberOfDay];
+			if (!empty($tariff[$numberOfDay])) {
+				$total = $tariff[$numberOfDay];
 			} else {
-				$latest = self::latestPrice($priceGrid[$site_id][$type_id->value][$parking_type->value]);
-				$total = $priceGrid[$site_id][$type_id->value][$parking_type->value][$latest];
-				$total += ($numberOfDay - $latest) * $priceGrid[$site_id][$type_id->value][$parking_type->value]['jour_supplementaire'];
+				$latest = self::latestPrice($tariff);
+				$total = $tariff[$latest] ?? 0;
+				$total += ($numberOfDay - $latest) * ($tariff['jour_supplementaire'] ?? 0);
 			}
 
 			$price['total'] = $price['total_reel'] = (int)$total;
@@ -194,7 +194,7 @@ class Price implements IShortcode, IParkingmanagement
 				// Continue without holiday pricing if check fails
 			}
 
-			if (HighSeason::is($start) || HighSeason::is($end)) {
+			if (HighSeason::is($start, $site) || HighSeason::is($end, $site)) {
 				$price['high_season'] = 1;
 				$price['total'] += $high_season['price'];
 				Logger::info("price.getPrice.highSeason", [
@@ -267,11 +267,56 @@ class Price implements IShortcode, IParkingmanagement
 	}
 
 	/**
+	 * Picks the parking type (ext/int/valet) to price against: the submitted value
+	 * when it is one the site actually enables, otherwise the site's first enabled
+	 * type.
+	 */
+	/**
+	 * Picks ext/int/valet to price against. Valet is only ever offered for cars,
+	 * regardless of what the site enables, so it's excluded from the candidate
+	 * list entirely for any other vehicle type.
+	 */
+	private function resolveParkingType(array|WP_REST_Request $data, array $site, VehicleType $type_id): ParkingType
+	{
+		$isCar = $type_id === VehicleType::CAR;
+		$submitted = $this->getData($data, 'parking_type');
+		if ($submitted !== '' && is_numeric($submitted)) {
+			try {
+				$candidate = ParkingType::fromInt((int)$submitted);
+				$key = self::parkingTypeKey($candidate);
+				if (($key !== 'valet' || $isCar) && ($site['type'][$key] ?? '0') === '1') {
+					return $candidate;
+				}
+			} catch (InvalidArgumentException $e) {
+				// fall through to the site's default below
+			}
+		}
+		foreach (['ext' => ParkingType::OUTSIDE, 'int' => ParkingType::INSIDE, 'valet' => ParkingType::VALET] as $key => $case) {
+			if ($key === 'valet' && !$isCar) {
+				continue;
+			}
+			if (($site['type'][$key] ?? '0') === '1') {
+				return $case;
+			}
+		}
+		return ParkingType::OUTSIDE;
+	}
+
+	private static function parkingTypeKey(ParkingType $type): string
+	{
+		return match ($type) {
+			ParkingType::INSIDE => 'int',
+			ParkingType::VALET => 'valet',
+			default => 'ext',
+		};
+	}
+
+	/**
 	 * @throws Exception
 	 */
 	public function isHoliday(string $date): bool
 	{
-		$conn = database::connect($this->kind);
+		$conn = database::connect();
 		if ($conn === false)
 			throw new Exception("Database connection failed");
 		if ($row = $conn->get_row(
@@ -284,84 +329,96 @@ class Price implements IShortcode, IParkingmanagement
 	}
 
 	/**
+	 * Pulls the most recently written tariff grid out of the legacy
+	 * `tbl_remplissage.grille_tarifaire` column - the same row/table
+	 * `Booked::getMaxLot()`/`usedLot()` already read `client`/`employe`/`utilisee`
+	 * from - and reshapes it into this plugin's own
+	 * `tariffs[vehicle][parking_type][day]` grid for the given airport. Used by
+	 * the admin "Load from DB" action to prefill a site's Price tab from data the
+	 * legacy system already has, instead of hand-typing or CSV-importing it.
 	 * @throws Exception
 	 */
-	public function priceGrid(Airport $site = Airport::ORLY, $numberOfDay = 0, $start = NULL, $end = NULL, VehicleType $type_id = VehicleType::CAR, ParkingType $parking_type = ParkingType::OUTSIDE): array
+	public function loadFromDatabase(string $airport): array
 	{
-		$site_id = $site->value;
-		$conn = database::connect($this->kind);
-		if ($conn === false) {
-			Logger::error("price.priceGrid", database::getError());
+		$conn = database::connect();
+		if (!$conn) {
 			throw new Exception("Database connection failed");
 		}
-		$start = !empty($start) ? $start : date('Y-m-d');
-		$end = !empty($end) ? $end : date('Y-m-d');
-		$start = DateTime::createFromFormat('Y-m-d', $start);
-		$end = DateTime::createFromFormat('Y-m-d', $end);
-
-		$priceGrid = $price = array();
-		if (!$results = $conn->get_results(
-			$conn->prepare(
-				"SELECT `date`, `grille_tarifaire` FROM `tbl_remplissage` WHERE (`date` BETWEEN %s AND %s)",
-				[$start->format('Y-m-d'), $end->format('Y-m-d')]
-			),
-			ARRAY_A
-		))
-			throw new Exception("get price grid failed");
-		foreach ($results as $row) {
-			$priceGrid[$row['date']] = $row['grille_tarifaire'];
-			$deserialized = unserialize($row['grille_tarifaire']);
-			$latest = self::latestPrice($deserialized[$site_id][$type_id->value][$parking_type->value]);
-			$price[$row['date']] = !empty($deserialized[$site_id][$type_id->value][$parking_type->value][$numberOfDay]) && !empty($latest) ? $deserialized[$site_id][$type_id->value][$parking_type->value][$numberOfDay] : $deserialized[$site_id][$type_id->value][$parking_type->value][$latest];
+		$row = $conn->get_row("SELECT `grille_tarifaire` FROM `tbl_remplissage` ORDER BY `date` DESC LIMIT 1", ARRAY_A);
+		if (!empty($conn->last_error)) {
+			Logger::error("price.loadFromDatabase", ['errorInfo' => $conn->last_error]);
+			throw new Exception("Error executing query");
 		}
-		if (empty($price) || empty($priceGrid))
-			throw new Exception("price grid empty");
-		$max = max($price);    // Get the higher price
-		$flip = array_flip($price);
-		return array('grille' => $priceGrid[$flip[$max]], 'date' => $flip[$max]);
+		if (empty($row['grille_tarifaire'])) {
+			return [];
+		}
+		$grid = @unserialize($row['grille_tarifaire'], ['allowed_classes' => false]);
+		if (!is_array($grid)) {
+			return [];
+		}
+		$parkingId = Order::getSiteID($airport)->value;
+		$siteGrid = $grid[$parkingId] ?? [];
+		if (!is_array($siteGrid)) {
+			return [];
+		}
+
+		$tariffs = [];
+		foreach (VehicleType::cases() as $vehicleType) {
+			foreach (ParkingType::cases() as $parkingType) {
+				if ($parkingType === ParkingType::VALET) {
+					continue; // the legacy grid has no valet slot - valet is this plugin's own addition
+				}
+				$days = $siteGrid[$vehicleType->value][$parkingType->value] ?? [];
+				if (empty($days) || !is_array($days)) {
+					continue;
+				}
+				$entry = [];
+				for ($day = 1; $day <= 10; $day++) {
+					if (isset($days[$day]) && is_numeric($days[$day])) {
+						$entry[$day] = $days[$day];
+					}
+				}
+				if (isset($days['jour_supplementaire']) && is_numeric($days['jour_supplementaire'])) {
+					$entry['jour_supplementaire'] = $days['jour_supplementaire'];
+				}
+				if (!empty($entry)) {
+					$tariffs[strtolower($vehicleType->name)][self::parkingTypeKey($parkingType)] = $entry;
+				}
+			}
+		}
+		return $tariffs;
 	}
 
-
 	/**
-	 * @throws Exception
+	 * Returns every active site's own tariff table, keyed by site id, used by the
+	 * price REST endpoint when no specific dates are requested.
 	 */
-	public function priceGridFuture(DateTime $date){
-		$conn = database::connect($this->kind);
-		if ($conn === false) {
-			Logger::error("price.priceGrid", database::getError());
-			throw new Exception("Database connection failed");
-		}
-		if (!$result = $conn->get_row(
-			$conn->prepare(
-				"SELECT `grille_tarifaire` FROM `tbl_remplissage` WHERE `date` = '%s'",
-				[$date->format('Y-m-d')]
-			),
-			ARRAY_A
-		))
-			throw new Exception("get price grid failed");
+	public function allSitesTariffs(): array
+	{
 		$price = [];
-		$row = unserialize($result['grille_tarifaire']);
-		Logger::info('price.priceDridFuture',['row' =>$row]);
-		foreach ($row as $airport_id => $airport_data ) {
-			foreach ($airport_data as $vehicle_id => $vehicle_data) {
-				foreach ($vehicle_data as $parking_type_id => $parking_type_data) {
-					$airport = Airport::fromInt($airport_id);
-					$parking = ParkingType::fromInt($parking_type_id);
-					$vehicle = VehicleType::fromInt($vehicle_id);
-					if ($parking == ParkingType::VALET) {
-						$kind = 'valet';
-						$parking = ParkingType::OUTSIDE;
-					} else {
-						$kind = 'booking';
+		foreach (Site::activeOnly() as $id => $site) {
+			foreach ($site['vehicle_types'] ?? [] as $vehicleKey => $enabled) {
+				if ($enabled !== '1') {
+					continue;
+				}
+				foreach (['ext', 'int', 'valet'] as $parkingKey) {
+					if (($site['type'][$parkingKey] ?? '0') !== '1') {
+						continue;
 					}
-					foreach ($parking_type_data as $nbDay => $priceDay) {
-						if ($priceDay == 0)
-							continue;
-						if (is_numeric($nbDay))
-							$price[strtolower($airport->name)][$kind][strtolower($parking->name)][strtolower($vehicle->name)]['prices'][$date->format('Y-m-d')][$nbDay] = (int)$priceDay;
-						else
-							$price[strtolower($airport->name)][$kind][strtolower($parking->name)][strtolower($vehicle->name)]['extra_day'] = (int)$priceDay;
+					$tariff = $site['tariffs'][$vehicleKey][$parkingKey] ?? [];
+					$days = [];
+					foreach ($tariff as $day => $value) {
+						if (is_numeric($day) && !empty($value)) {
+							$days[$day] = (int)$value;
+						}
 					}
+					if (empty($days)) {
+						continue;
+					}
+					$price[$id][$parkingKey][$vehicleKey] = [
+						'prices' => $days,
+						'extra_day' => (int)($tariff['jour_supplementaire'] ?? 0),
+					];
 				}
 			}
 		}
@@ -370,14 +427,17 @@ class Price implements IShortcode, IParkingmanagement
 
 	public static function latestPrice($grid): int
 	{
-		$day = 1;
+		$day = 0;
 		foreach ($grid as $k => $v) {
+			if (!is_numeric($k)) {
+				continue;
+			}
 			if (empty($v)) {
-				$day = $k;
 				break;
 			}
+			$day = (int)$k;
 		}
-		return $day - 1;
+		return $day;
 	}
 
 	private function night_extra($hour, $night_extra_charge): int
@@ -416,11 +476,6 @@ class Price implements IShortcode, IParkingmanagement
 	{
 		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/price/css/price.css'));
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array(), '5.3.3');
-	}
-
-	public function setKind(string $kind): void
-	{
-		$this->kind = $kind;
 	}
 }
 

@@ -29,11 +29,6 @@ class HomeForm
 			),
 			PKMGMT_VERSION
 		);
-		$properties = $pm->get_properties();
-		unset($properties['payment']);
-		unset($properties['database']);
-		unset($properties['sms']);
-		unset($properties['response']);
 		wp_localize_script('parking-management-home-form',
 			'external_object',
 			array(
@@ -41,8 +36,6 @@ class HomeForm
 				'i18n_path' => pkmgmt_plugin_url('languages'),
 				'home_url' => home_url(),
 				'home_form_css' => pkmgmt_plugin_url('modules/booking/css/home_form.css'),
-				'site_id' => Order::getSiteID($properties['info']['terminal'])->value,
-				'properties' => $properties,
 			)
 		);
 	}
@@ -52,18 +45,13 @@ class HomeForm
 		$this->enqueue($pm);
 	}
 
-	public function hidden(ParkingManagement $pm, string $kind): string
+	public function hidden(ParkingManagement $pm): string
 	{
-		$info = $pm->prop('info');
+		$site = Site::current();
 		$contents = array();
 		$contents[] = Html::_index('hidden', 'pkmgmt_action', 'pkmgmt_action', array('value' => 'home-form'));
 		$contents[] = Html::_index('hidden', 'type_id', 'type_id', array('value' => '1'));
-		$contents[] = Html::_index('hidden', 'kind', 'kind', array('value' => $kind));
-		if ($kind === 'valet') {
-			$contents[] = Html::_index('hidden', 'parking_type', 'parking_type', array('value' => '2'));
-		}
-		$contents[] = Html::_index('hidden', 'site_id', 'site_id', array('value' => Order::getSiteID($info['terminal'])->value));
-		$contents[] = Html::_index('hidden', 'aeroport', 'aeroport', array('value' => Order::getSiteID($info['terminal'])->value));
+		$contents[] = Html::_index('hidden', 'aeroport', 'aeroport', array('value' => Order::getSiteID($site['airport'] ?? 'orly')->value));
 		return implode("", $contents);
 
 	}

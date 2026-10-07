@@ -13,12 +13,10 @@ class Vehicle
 
 	private array $data;
 	private wpdb $conn;
-	private string $kind;
 
-	public function __construct(string $kind)
+	public function __construct()
 	{
-		$this->kind = $kind;
-		if (!$conn = database::connect($kind)) {
+		if (!$conn = database::connect()) {
 			Logger::error("member.database.connect", database::getError());
 			return;
 		}
@@ -37,7 +35,6 @@ class Vehicle
 			return $vehicule_id;
 
 		$priceInstance = new Price(getParkingManagementInstance());
-		$priceInstance->setKind($this->kind);
 		$price = $priceInstance->getPrice($this->data);
 		$params = array(
 			'commande_id' => $order_id

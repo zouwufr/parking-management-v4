@@ -2,7 +2,6 @@
 
 namespace ParkingManagement\API;
 
-use Booking\ParkingType;
 use Exception;
 use ParkingManagement\database\database;
 use ParkingManagement\Logger;
@@ -44,19 +43,20 @@ class Destination extends API
 	public function get_item($request): WP_Error|WP_REST_Response
 	{
 		try {
-			$kind = 'booking';
-			if ($request->has_param('parking_type') && $request['parking_type'] == ParkingType::VALET->value)
-				$kind = 'valet';
-			$conn = database::connect($kind);
+			$conn = database::connect();
 			if (!$conn)
 				return new WP_Error("database_connection_failed", __("Database connection failed.", 'parking-management'));
 			$data = array();
-			if (! $results = $conn->get_results(
+			// get_results(..., ARRAY_A) always returns an array - an empty one both on a
+			// real query failure AND on a legitimate "no destination matches this term"
+			// result. Checking `!$results` conflated the two, turning a simple no-match
+			// search into a fake "database error". last_error is the real error signal.
+			$results = $conn->get_results(
 				$conn->prepare(
 					"SELECT `id_destination`, `iata`, `titre`, `pays` FROM `tbl_destination` WHERE `iata` LiKE %s OR `oaci` LiKE %s OR `titre` LiKE %s ORDER BY `pays` , `titre` ",
 					["%" . $request['term'] . "%", "%" . $request['term'] . "%", "%" . $request['term'] . "%"]
-				), ARRAY_A)
-			) {
+				), ARRAY_A);
+			if (!empty($conn->last_error)) {
 				return new WP_Error("database_error", __("Database error.", 'parking-management'));
 			}
 			foreach ($results as $row) {

@@ -23,15 +23,12 @@ class Payplug implements IPayment
 	private string $payment_url;
 	private float $amount;
 
-	private string $kind;
-
-	public function __construct(array $config, string $kind, int $order_id)
+	public function __construct(array $config, int $order_id)
 	{
 
 		$this->order_id = $order_id;
 		$this->config = $config;
 		$this->properties = $config['properties']['payplug'];
-		$this->kind = $kind;
 		$this->payment_url = $this->initPayment();
 	}
 
@@ -56,11 +53,11 @@ class Payplug implements IPayment
 	{
 		$data = array();
 		try {
-			$order = new Order($this->kind);
+			$order = new Order();
 			$data['order'] = $order->read($this->order_id);
 			if ($data['order']['paye'] == $data['order']['total'])
 				return '';
-			$member = new Member($this->kind);
+			$member = new Member();
 			$data['member'] = $member->read($data['order']['membre_id']);
 			$data['post'] = $_POST;
 			$this->amount = $data['order']['total'];
@@ -69,9 +66,9 @@ class Payplug implements IPayment
 			\Payplug\Payplug::init(array(
 				'secretKey' => $secretKey
 			));
-			$success_url = $this->properties['success_page']['value'] . "?from=provider&kind={$this->kind}&order_id={$this->order_id}";
-			$cancel_url = $this->properties['cancel_page']['value'] . "?kind={$this->kind}&order_id={$this->order_id}";
-			$notify_url = home_url() . "/wp-json/pkmgmt/v1/payplug/ipn?kind={$this->kind}";
+			$success_url = $this->properties['success_page']['value'] . "?from=provider&order_id={$this->order_id}";
+			$cancel_url = $this->properties['cancel_page']['value'] . "?order_id={$this->order_id}";
+			$notify_url = home_url() . "/wp-json/pkmgmt/v1/payplug/ipn";
 			if ($this->properties['notification_url']['value'] !== '')
 				$notify_url = $this->properties['notification_url']['value'];
 			$payload = array(
@@ -97,7 +94,6 @@ class Payplug implements IPayment
 				'notification_url' => $notify_url,
 				'metadata' => array(
 					'id_commande' => $this->order_id,
-					'kind' => $this->kind,
 				)
 			));
 

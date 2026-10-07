@@ -2,6 +2,7 @@
 
 namespace ParkingManagement\API;
 
+use Booking\Site;
 use ParkingManagement\DatesRange;
 use ParkingManagement\Logger;
 use WP_Error;
@@ -30,6 +31,10 @@ class HighSeasonApi extends Api
 					'default' => "false",
 					'required' => false
 				],
+				'site_id' => [
+					'description' => 'The site to get the high season window for',
+					'required' => false
+				],
 			]
 		]);
 	}
@@ -40,10 +45,11 @@ class HighSeasonApi extends Api
 	 */
 	public function get_items($request): WP_REST_Response|WP_Error
 	{
-		$pm = getParkingManagementInstance();
-		if (!$pm)
+		$site_id = $request->get_param('site_id');
+		$site = !empty($site_id) ? Site::find($site_id) : Site::defaultSite();
+		if ($site === null)
 			return new WP_Error('error', __('failed to get config', 'parking-management'), ['status' => 500]);
-		$highSeasons = $pm->prop('high_season');
+		$highSeasons = $site['high_season'] ?? [];
 		$raw = $request->has_param('raw') ? $request->get_param('raw') : false;
 		if (empty($highSeasons['dates']) || !is_array($highSeasons['dates']))
 			return rest_ensure_response([]);

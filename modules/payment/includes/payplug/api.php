@@ -3,6 +3,7 @@
 namespace ParkingManagement\API;
 
 use Booking\Order;
+use Booking\Site;
 use Exception;
 use ParkingManagement\Logger;
 use ParkingManagement\PaymentID;
@@ -33,6 +34,7 @@ class PayplugAPI extends API
 				'callback' => [$this, 'create_item'],
 				'permission_callback' => '__return_true',
 				'args' => [
+					'site_id' => ['required' => false],
 					'any_param' => ['required' => false]
 				]
 			]
@@ -47,23 +49,17 @@ class PayplugAPI extends API
 	 */
 	public function create_item($request): WP_Error|WP_REST_Response
 	{
-		$kind = $request->get_param('kind');
-		if ($kind === null) {
-			Logger::error("payplug.api.create_item", ["message" => "missing kind"]);
+		$site_id = $request->get_param('site_id');
+		$site = $site_id !== null ? Site::find($site_id) : null;
+		if ($site === null) {
+			Logger::error("payplug.api.create_item", ["message" => "missing or invalid site_id"]);
 			return new WP_Error(
 				'payplug-notification-error',
 				'Missing parameter',
 				array('status' => WP_Http::BAD_REQUEST)
 			);
 		}
-		$pm = getParkingManagementInstance();
-		if (!$pm)
-			return new WP_Error(
-				'get-parking-management-instance',
-				__('failed to get parking management instance', 'parking-management'),
-				array('status' => WP_Http::BAD_REQUEST)
-			);
-		$payment = $pm->prop($kind)['payment'];
+		$payment = $site['payment'];
 		$provider = $payment['properties']['payplug'];
 		$test_enabled = ($payment['active-test'] == '1');
 		$secretKey = $test_enabled ? $provider['secret_key_test']['value'] : $provider['secret_key']['value'];
@@ -85,7 +81,7 @@ class PayplugAPI extends API
 
 				$amount = ($resource->amount / 100);
 				$payment_id = PaymentID::PAYPLUG;
-				$order = new Order($kind);
+				$order = new Order();
 				$order->update_payment((int)$order_id, $payment_date, $amount, $payment_id);
 				Logger::info("payplug.api.create_item", "record payment status recorded");
 				return new WP_REST_Response(null, WP_Http::NO_CONTENT);

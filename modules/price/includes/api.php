@@ -2,8 +2,6 @@
 
 namespace ParkingManagement\API;
 
-use DateTime;
-use DateTimeZone;
 use Exception;
 use ParkingManagement\Logger;
 use ParkingManagement\Price;
@@ -40,11 +38,6 @@ class PriceAPI extends API
 							'type' => "string",
 							'required' => false,
 						),
-						'kind' => [
-							'description' => "The kind of the price",
-							'type' => "string",
-							'required' => true,
-						],
 						'nb_pax' => array(
 							'description' => "Number of passenger",
 							'type' => "int",
@@ -55,6 +48,11 @@ class PriceAPI extends API
 							'type' => "int",
 							'required' => false,
 						),
+						'site_id' => array(
+							'description' => "Parking site",
+							'type' => "string",
+							'required' => false,
+						),
 						'any_param' => array(
 							'required' => false,
 						),
@@ -63,6 +61,44 @@ class PriceAPI extends API
 				)
 			)
 		);
+
+		register_rest_route($this->namespace, self::rest_base . '/db-grid', array(
+				array(
+					'methods' => WP_REST_Server::READABLE,
+					'callback' => array($this, 'get_db_grid'),
+					'permission_callback' => function () {
+						return current_user_can('manage_options');
+					},
+					'args' => array(
+						'airport' => array(
+							'description' => "Airport key to resolve the legacy parking_id from",
+							'type' => "string",
+							'required' => true,
+						),
+					),
+				)
+			)
+		);
+	}
+
+	/**
+	 * Admin-only: pulls the legacy system's own tariff grid (tbl_remplissage.grille_tarifaire)
+	 * for the given airport, used to prefill a site's Price tab from the database.
+	 *
+	 * @param WP_REST_Request $request Full details about the request.
+	 * @return WP_Error|WP_REST_Response Response object on success, or WP_Error object on failure.
+	 */
+	public function get_db_grid($request): WP_Error|WP_REST_Response
+	{
+		try {
+			$pm = getParkingManagementInstance();
+			$price = new Price($pm);
+			$data = $price->loadFromDatabase($request->get_param('airport'));
+		} catch (Exception $e) {
+			Logger::error("price.api.get_db_grid", $e->getMessage());
+			return new WP_Error('error', $e->getMessage());
+		}
+		return rest_ensure_response($data);
 	}
 
 	/**
@@ -82,24 +118,12 @@ class PriceAPI extends API
 			]
 		]);
 		try {
-			$kind = $request->get_param('kind');
-			if ($kind === null) {
-				Logger::error("price.api.create_item", ["message" => "missing kind"]);
-				return new WP_Error(
-					'price-notification-error',
-					'Missing parameter',
-					array('status' => WP_Http::BAD_REQUEST)
-				);
-			}
 			$pm = getParkingManagementInstance();
 			$price = new Price($pm);
-			$price->setKind($kind);
 			if ($request->has_param('depart') && $request->has_param('retour')) {
 				$data = $price->getPrice($request);
 			} else{
-				$zone = new DateTimeZone("Europe/Paris");
-				$date = new DateTime( 'now', $zone);
-				$data = $price->priceGridFuture($date);
+				$data = $price->allSitesTariffs();
 			}
 		} catch (Exception $e) {
 			Logger::error("price.api.get_item", $e->getMessage());

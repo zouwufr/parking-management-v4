@@ -2,6 +2,8 @@
 
 namespace ParkingManagement\Admin;
 
+use Booking\Airport;
+use Booking\Terminal;
 use Exception;
 use ParkingManagement\ParkingManagement;
 use ParkingManagement\Template;
@@ -73,6 +75,26 @@ class Admin
 			'parking-management-admin-bottom',
 			'config',
 			['screen_id' => $screen_id]
+		);
+
+		$terminals = array();
+		foreach (Airport::cases() as $airport) {
+			$terminals[strtolower($airport->name)] = Terminal::forAirport($airport);
+		}
+		wp_localize_script(
+			'parking-management-admin',
+			'pkmgmt_sites_config',
+			array(
+				'airports' => Terminal::airportOptions(),
+				'terminals' => $terminals,
+				'vehicle_types' => array(
+					'car' => __('Car', 'parking-management'),
+					'motorcycle' => __('Motorcycle', 'parking-management'),
+					'truck' => __('Truck', 'parking-management'),
+				),
+				'rest_url' => esc_url_raw(rest_url('pkmgmt/v1/')),
+				'nonce' => wp_create_nonce('wp_rest'),
+			)
 		);
 	}
 

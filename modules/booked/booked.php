@@ -4,6 +4,7 @@ namespace ParkingManagement;
 
 use Booking\Airport;
 use Booking\Order;
+use Booking\Site;
 use DateTime;
 use DateTimeZone;
 use Exception;
@@ -27,7 +28,11 @@ class Booked implements IShortcode, IParkingManagement
 	public function shortcode(string $type): string
 	{
 		$this->enqueue();
-		return self::HTMLMessage($this->pm);
+		$site = Site::current();
+		if ($site === null) {
+			return '';
+		}
+		return self::HTMLMessage($site, $this->pm->locale);
 	}
 
 	private function enqueue(): void
@@ -38,9 +43,9 @@ class Booked implements IShortcode, IParkingManagement
 	/**
 	 * @throws Exception
 	 */
-	public static function getMaxLot($kind, $start, $end, $parking_id = Airport::ORLY, $field = NULL): array
+	public static function getMaxLot($start, $end, $parking_id = Airport::ORLY, $field = NULL): array
 	{
-		$conn = database::connect($kind);
+		$conn = database::connect();
 		if (!$conn)
 			throw new Exception("Database connection failed");
 		$field = !empty($field) ? 'employe' : 'client';
@@ -49,13 +54,18 @@ class Booked implements IShortcode, IParkingManagement
 		$start = DateTime::createFromFormat('Y-m-d', $start);
 		$end = DateTime::createFromFormat('Y-m-d', $end);
 
-		if (! $results = $conn->get_results(
+		// wpdb::get_results(..., ARRAY_A) always returns an array - an empty one both on
+		// a real query failure AND on a legitimate "no rows for this range" result, so
+		// the return value alone can't tell the two apart. Checking `!$results` (or
+		// `=== null`) treated a simple lack of capacity data for a date range as a hard
+		// error and aborted the whole price calc. last_error is the actual error signal.
+		$results = $conn->get_results(
 			$conn->prepare(
 				"SELECT $field FROM `tbl_remplissage` WHERE `date` >= %s AND `date` < DATE_ADD(%s, INTERVAL 1 DAY) ORDER BY `date`",
 				[$start->format('Y-m-d'), $end->format('Y-m-d')]
-			), ARRAY_A)
-		) {
-			Logger::error("booked.getMaxLot", ['errorInfo' => $conn->last_error, 'results' => $results]);
+			), ARRAY_A);
+		if (!empty($conn->last_error)) {
+			Logger::error("booked.getMaxLot", ['errorInfo' => $conn->last_error]);
 			throw new Exception("Error executing query");
 		}
 		foreach ($results as $row) {
@@ -68,21 +78,21 @@ class Booked implements IShortcode, IParkingManagement
 	/**
 	 * @throws Exception
 	 */
-	public static function usedLot($kind, $start, $end = NULL, $parking_id = Airport::ORLY): array
+	public static function usedLot($start, $end = NULL, $parking_id = Airport::ORLY): array
 	{
-		$conn = database::connect($kind);
+		$conn = database::connect();
 		if (!$conn)
 			throw new Exception("Database connection failed");
 		$start = DateTime::createFromFormat('Y-m-d', $start);
 		$end = !empty($end) ? DateTime::createFromFormat('Y-m-d', $end) : DateTime::createFromFormat('Y-m-d', $start);
 
 		$used = array();
-		if (! $results = $conn->get_results(
+		$results = $conn->get_results(
 			$conn->prepare(
 				"SELECT `date`, `utilisee` FROM `tbl_remplissage` WHERE `date` >= %s AND `date` <= %s",
 				[$start->format('Y-m-d'), $end->format('Y-m-d')]
-			), ARRAY_A)
-		) {
+			), ARRAY_A);
+		if (!empty($conn->last_error)) {
 			Logger::error("booked.usedLot", ['errorInfo' => $conn->last_error]);
 			throw new Exception("Error executing query");
 		}
@@ -96,13 +106,13 @@ class Booked implements IShortcode, IParkingManagement
 	}
 
 
-	private static function HTMLMessage(ParkingManagement $pm): string
+	private static function HTMLMessage(array $site, string $locale): string
 	{
 		try {
 			$zone = new DateTimeZone("Europe/Paris");
 			$date = new DateTime('now', $zone);
-			$booked = DatesRange::getDateRange($date->format('Y-m-d'), $pm->prop('booked_dates'));
-			$message = DatesRange::getMessage($booked, $pm->locale);
+			$booked = DatesRange::getDateRange($date->format('Y-m-d'), $site['booked_dates'] ?? []);
+			$message = DatesRange::getMessage($booked, $locale);
 			if (empty($message)) {
 				return '';
 			}
@@ -117,20 +127,17 @@ class Booked implements IShortcode, IParkingManagement
 		return '';
 	}
 
-	public static function is($date): bool
+	public static function is($date, ?array $site = null): bool
 	{
-		$pm = getParkingManagementInstance();
-		if (!$pm)
+		$site = $site ?? Site::current();
+		if ($site === null) {
 			return false;
-		$booked_dates = $pm->prop('booked_dates');
-		if (!array_key_exists('dates', $booked_dates))
+		}
+		$booked_dates = $site['booked_dates'] ?? [];
+		if (empty($booked_dates)) {
 			return false;
-		return DatesRange::isContain($date, $booked_dates['dates']);
-	}
-
-	public function setKind(string $kind): void
-	{
-		// TODO: Implement setKind() method.
+		}
+		return DatesRange::isContain($date, $booked_dates);
 	}
 }
 

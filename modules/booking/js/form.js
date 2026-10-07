@@ -64,55 +64,158 @@ document.addEventListener('DOMContentLoaded', function () {
 		getPrice();
 	})
 
+	// Parking site: filters vehicle types / storage type / terminals to what the
+	// selected site actually supports, since each site has its own tariff. The
+	// storage type (parking_type) must always stay aligned with both the selected
+	// site AND the selected vehicle type, since valet is only ever offered for cars.
+	const vehicleKeyByValue = {'1': 'car', '2': 'motorcycle', '3': 'truck'};
+	const parkingKeyByValue = {'0': 'ext', '1': 'int', '2': 'valet'};
+
+	function currentSiteId() {
+		const $select = $('.site-select');
+		return $select.length ? $select.val() : external_object.site_id;
+	}
+
+	function currentSite() {
+		const sites = external_object.sites || {};
+		return sites[currentSiteId()];
+	}
+
+	// parking_type options shown = site's enabled types, minus valet unless the
+	// currently checked vehicle type is a car.
+	function refreshParkingTypeOptions(site) {
+		const $parkingTypeRadios = $('input.parking-type');
+		if (!site) {
+			$parkingTypeRadios.closest('.radio').show();
+			return;
+		}
+		const isCar = vehicleKeyByValue[$('input.type-id:checked').val()] === 'car';
+		$parkingTypeRadios.each(function () {
+			const key = parkingKeyByValue[$(this).val()];
+			let supported = !!(site.type && site.type[key] === '1');
+			if (key === 'valet' && !isCar) {
+				supported = false;
+			}
+			$(this).closest('.radio').toggle(supported);
+			if (!supported && $(this).is(':checked')) {
+				$(this).prop('checked', false);
+			}
+		});
+		const $visibleParkingType = $parkingTypeRadios.filter(':visible');
+		if ($visibleParkingType.length && !$visibleParkingType.is(':checked')) {
+			$visibleParkingType.first().prop('checked', true);
+		}
+	}
+
+	function applySite(siteId) {
+		const sites = external_object.sites || {};
+		const site = sites[siteId];
+		const $typeIdRadios = $('input.type-id');
+
+		if (!site) {
+			$typeIdRadios.closest('.radio').show();
+			refreshParkingTypeOptions(null);
+			return;
+		}
+
+		$typeIdRadios.each(function () {
+			const key = vehicleKeyByValue[$(this).val()];
+			const supported = !!(site.vehicle_types && site.vehicle_types[key] === '1');
+			$(this).closest('.radio').toggle(supported);
+			if (!supported && $(this).is(':checked')) {
+				$(this).prop('checked', false);
+			}
+		});
+		const $visibleTypeId = $typeIdRadios.filter(':visible');
+		if ($visibleTypeId.length && !$visibleTypeId.is(':checked')) {
+			$visibleTypeId.first().prop('checked', true);
+		}
+
+		refreshParkingTypeOptions(site);
+
+		const terminals = (external_object.terminals && external_object.terminals[site.airport]) || [];
+		$('#terminal_depart, #terminal_arrivee').each(function () {
+			const $select = $(this);
+			const current = $select.val();
+			$select.empty();
+			terminals.forEach(function (terminal) {
+				$select.append($('<option>', {value: terminal.value, text: terminal.label}));
+			});
+			if (terminals.some(function (terminal) { return terminal.value === current; })) {
+				$select.val(current);
+			}
+		});
+	}
+
+	$('.site-select').on('change', function () {
+		applySite($(this).val());
+		loadSiteDependentDates();
+		getPrice();
+	}).trigger('change');
+
+	// Switching vehicle type can only ever narrow/widen the valet option; re-check
+	// parking_type alignment whenever it changes (getPrice() already re-fires
+	// separately via the shared change listener below).
+	$(document).on('change', 'input.type-id', function () {
+		refreshParkingTypeOptions(currentSite());
+	});
+
 	// Date picker
 	const DateTime = easepick.DateTime;
 	let highSeason = [];
-	$.ajax({
-		type: 'GET',
-		url: '/wp-json/pkmgmt/v1/high-season',
-		dataType: 'json',
-		async: false,
-		error: function (e, f, g) {
-			console.error("get high season failed", f);
-		},
-		success: function (data) {
-			if (data instanceof Array)
-			{
-				highSeason = data.map(d => {
-					if (d instanceof Array) {
-						const start = new DateTime(d[0], 'YYYY-MM-DD');
-						const end = new DateTime(d[1], 'YYYY-MM-DD');
-						return [start, end];
-					}
-					return new DateTime(d, 'YYYY-MM-DD');
-				});
-			}
-		}
-	});
-
 	let bookedDates = [];
-	$.ajax({
-		type: 'GET',
-		url: '/wp-json/pkmgmt/v1/booked',
-		dataType: 'json',
-		async: false,
-		error: function (e, f, g) {
-			console.error("get booked failed", f);
-		},
-		success: function (data) {
-			if (data instanceof Array)
-			{
-				bookedDates = data.map(d => {
-					if (d instanceof Array) {
-						const start = new DateTime(d[0], 'YYYY-MM-DD');
-						const end = new DateTime(d[1], 'YYYY-MM-DD');
-						return [start, end];
-					}
-					return new DateTime(d, 'YYYY-MM-DD');
-				});
+
+	function loadSiteDependentDates() {
+		const siteId = currentSiteId();
+		$.ajax({
+			type: 'GET',
+			url: '/wp-json/pkmgmt/v1/high-season',
+			data: {site_id: siteId},
+			dataType: 'json',
+			async: false,
+			error: function (e, f, g) {
+				console.error("get high season failed", f);
+			},
+			success: function (data) {
+				if (data instanceof Array)
+				{
+					highSeason = data.map(d => {
+						if (d instanceof Array) {
+							const start = new DateTime(d[0], 'YYYY-MM-DD');
+							const end = new DateTime(d[1], 'YYYY-MM-DD');
+							return [start, end];
+						}
+						return new DateTime(d, 'YYYY-MM-DD');
+					});
+				}
 			}
-		}
-	});
+		});
+
+		$.ajax({
+			type: 'GET',
+			url: '/wp-json/pkmgmt/v1/booked',
+			data: {site_id: siteId},
+			dataType: 'json',
+			async: false,
+			error: function (e, f, g) {
+				console.error("get booked failed", f);
+			},
+			success: function (data) {
+				if (data instanceof Array)
+				{
+					bookedDates = data.map(d => {
+						if (d instanceof Array) {
+							const start = new DateTime(d[0], 'YYYY-MM-DD');
+							const end = new DateTime(d[1], 'YYYY-MM-DD');
+							return [start, end];
+						}
+						return new DateTime(d, 'YYYY-MM-DD');
+					});
+				}
+			}
+		});
+	}
+
 	function syncValues(source, target) {
 		$(target).val($(source).val());
 	}
@@ -223,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	// Phone lib
-	const indicative = external_object.properties.form.indicative ? external_object.properties.form.indicative : "fr";
+	const indicative = external_object.indicative ? external_object.indicative : "fr";
 	const mobileInput = document.querySelector('#mobile');
 	const iti = window.intlTelInput(mobileInput, {
 		utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@23.1.0/build/js/utils.js",

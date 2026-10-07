@@ -28,9 +28,9 @@ class Member
 		return $this->member;
 	}
 
-	public function __construct($kind = 'booking')
+	public function __construct()
 	{
-		if (!$conn = database::connect($kind)) {
+		if (!$conn = database::connect()) {
 			Logger::error("member.database.connect", database::getError());
 			return;
 		}

@@ -12,12 +12,8 @@ class ParkingManagement
 
 	const properties_available = [
 		'info' => ['title' => 'Information'],
-		'form' => ['title' => 'Form Options'],
-		'booked_dates' => ['title' => 'Booked dates'],
-		'high_season' => ['title'=>'High season'],
-		'notification' => ['title'=>'Notification'],
-		'booking' => ['title' => 'Booking Options'],
-		'valet' => ['title' => 'Valet Options'],
+		'database' => ['title' => 'Database'],
+		'sites' => ['title' => 'Sites'],
 	];
 	private static ParkingManagement|null $current = null;
 

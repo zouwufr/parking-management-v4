@@ -15,6 +15,7 @@ class Logger
 	private static int $retention = 30;
 
 	private static array $info;
+	private static bool $configuring = false;
 
 	public static function log(string $type, string $action, mixed $message): void
 	{
@@ -54,6 +55,14 @@ class Logger
 
 	private static function config(): void
 	{
+		// Re-entrancy guard: database::connect() logs an error on failure, which
+		// re-enters this method - without this guard an unconfigured database causes
+		// unbounded recursion (Logger::log -> config -> connect -> Logger::error -> log -> ...).
+		if (self::$configuring) {
+			return;
+		}
+		self::$configuring = true;
+
 		PKMGMT::load_modules();
 		if (empty(self::$info)) {
 			$pm = getParkingManagementInstance();
@@ -66,7 +75,7 @@ class Logger
 		if (empty(self::$retention))
 			self::$retention = (int)self::$info['logs']['retention'] ?? 30;
 		if (!self::$conn)
-			self::$conn = database::connect('booking');
+			self::$conn = database::connect();
 		if (self::$useFile && !is_dir(self::logDirectory)) {
 			mkdir(self::logDirectory, 0755, true);
 		}
@@ -81,6 +90,7 @@ class Logger
 			file_put_contents(self::logDirectory . DS . '.htaccess', $fileContent);
 		}
 
+		self::$configuring = false;
 	}
 
 	private static function getClientIP()
