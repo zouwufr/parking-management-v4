@@ -6,7 +6,7 @@ use Booking\Form;
 use Booking\HomeForm;
 use Booking\Member;
 use Booking\Order;
-use Booking\ParkingType;
+use Booking\Site;
 use Booking\Vehicle;
 use Exception;
 use ParkingManagement\interfaces\IParkingmanagement;
@@ -16,7 +16,9 @@ require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "p
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "vehicle_type.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "iata.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "airport.php";
+require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "terminal.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "types" . DS . "order_status.php";
+require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "site.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "form.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "home_form.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "member.php";
@@ -28,8 +30,6 @@ class Booking implements IShortcode, IParkingManagement
 
 	private ParkingManagement $pm;
 
-	private string $kind = 'booking';
-
 	public function __construct(ParkingManagement $pm)
 	{
 		$this->pm = $pm;
@@ -40,14 +40,13 @@ class Booking implements IShortcode, IParkingManagement
 		return match ($type) {
 			'form' => $this->shortcode_form(),
 			'home-form' => $this->shortcode_home_form(),
-			'default' => '',
+			default => '',
 		};
 	}
 
 	private function shortcode_form(): string
 	{
 		$form = new Form($this->pm);
-		$form->setKind($this->kind);
 		return $this->message() .
 			Html::_div(array('class' => 'form container-md col mt-5'),
 				Html::_div(array('class' => 'row'),
@@ -94,7 +93,7 @@ class Booking implements IShortcode, IParkingManagement
 			Html::_div(array('class' => 'row'),
 				Html::_div(array('class' => 'col-12'),
 					Html::_form('quote', 'quote', 'post', '', array(),
-						$home_form->hidden($this->pm, $this->kind),
+						$home_form->hidden($this->pm),
 						Html::_div(array('class' => 'row row-cols-3'),
 							$home_form->quote($this->pm),
 						)
@@ -110,38 +109,38 @@ class Booking implements IShortcode, IParkingManagement
 		$post = array_merge($_GET, $_POST);
 		$page = home_url();
 
-		Logger::debug('booking.record', ['kind' => $this->kind]);
 		try {
-			$member = new Member($this->kind);
+			$member = new Member();
 			$member_id = $member->isMemberExists($post['email']);
 			if (!$member_id)
 				$member_id = $member->create();
 			else
 				$member->patch($member_id, $post);
-			$order = new Order($this->kind);
+			$order = new Order();
 			$order_id = $order->create($member_id);
 			if ($order_id === 0)
 				exit(0);
-			$vehicle = new Vehicle($this->kind);
+			$vehicle = new Vehicle();
 			$vehicle->create($order_id);
 
+			$site = Site::current();
+
 			$payment = new Payment($this->pm);
+			$payment->setSite($site ?? []);
 			$payment->setOrderId($order_id);
-			$payment->setKind($this->kind);
 			if ($payment->isEnabled() && $payment->doRedirect()) {
 				$_GET['order_id'] = $order_id;
-				Logger::debug('booking.record', ["source" => $this->kind, "order_id" => $order_id]);
-				$data = $this->getData($order_id, $member_id);;
+				Logger::debug('booking.record', ["order_id" => $order_id]);
+				$data = $this->getData($order_id, $member_id, $site ?? []);
 				$not = new Notification($this->pm);
-				$not->setKind($this->kind);
-				$not->confirmation($data, $order);
+				$orderInstance = new Order();
+				$not->confirmation($data, $orderInstance, $site ?? []);
 				$payment->redirect();
 			}
-			$form = $this->pm->prop($this->kind);
-			if ($form['validation_page']['value'] != '' )
-				$page = $form['validation_page']['value'];
+			if (!empty($site['form']['validation_page']['value']))
+				$page = $site['form']['validation_page']['value'];
 
-			wp_redirect($page . '?order_id=' . $order_id .'&kind=' . $this->kind);
+			wp_redirect($page . '?order_id=' . $order_id);
 			exit(0);
 
 		} catch (Exception $e) {
@@ -152,25 +151,20 @@ class Booking implements IShortcode, IParkingManagement
 		}
 	}
 
-	public function setKind(string $kind): void
-	{
-		$this->kind = $kind;
-	}
-
 	/**
 	 * @throws Exception
 	 */
-	private function getData($order_id, $member_id): array
+	private function getData($order_id, $member_id, array $site): array
 	{
-		$orderInstance = new Order($this->kind);
+		$orderInstance = new Order();
 		$order = $orderInstance->read($order_id);
-		$memberInstance = new Member($this->kind);
+		$memberInstance = new Member();
 		$member = $memberInstance->read($member_id);
-		$vehicleInstance = new Vehicle($this->kind);
+		$vehicleInstance = new Vehicle();
 		$vehicle = $vehicleInstance->read($order_id);
 
-		$info = $this->pm->prop('info');
-		$form = $this->pm->prop('form');
+		$info = $site['info'] ?? [];
+		$form = $site['form'] ?? [];
 		$data = replacementData('member', $member);
 		$data = array_merge($data, replacementData('order', $order));
 		$data = array_merge($data, replacementData('vehicle', $vehicle));
@@ -178,12 +172,12 @@ class Booking implements IShortcode, IParkingManagement
 		$data['order_arrivee_formated'] = DatesRange::convertDate($data['order_arrivee'] . ' ' . $data['order_arrivee_heure'], 'Y-m-d H:i:s', 'd MMMM y H:mm');
 		$data['order_id'] = $_GET['order_id'];
 		$data['member_id'] = $order['membre_id'];
-		$data['info_name'] = $this->pm->title;
-		$data['info_address'] = $info['address'];
-		$data['info_mobile'] = $info['mobile'];
-		$data['info_rcs'] = $info['RCS'];
-		$data['info_email'] = $info['email'];
-		$data['form_options_late_price'] = $form['options']['late']['price'];
+		$data['info_name'] = $site['name'] ?? $this->pm->title;
+		$data['info_address'] = $info['address'] ?? '';
+		$data['info_mobile'] = $info['mobile'] ?? '';
+		$data['info_rcs'] = $info['RCS'] ?? '';
+		$data['info_email'] = $info['email'] ?? '';
+		$data['form_options_late_price'] = $form['options']['late']['price'] ?? 0;
 		$data['url_access'] = home_url();
 		$data['home_url'] = home_url();
 		return $data;

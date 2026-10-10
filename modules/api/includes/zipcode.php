@@ -3,7 +3,6 @@
 namespace ParkingManagement\API;
 
 use Booking\Order;
-use Booking\ParkingType;
 use Exception;
 use ParkingManagement\database\database;
 use ParkingManagement\Logger;
@@ -45,10 +44,7 @@ class Zipcode extends API
 	public function get_item($request): WP_Error|WP_REST_Response
 	{
 		try {
-			$kind = 'booking';
-			if ($request->has_param('parking_type') && $request['parking_type'] == ParkingType::VALET->value)
-				$kind = 'valet';
-			$conn = database::connect($kind);
+			$conn = database::connect();
 			if (!$conn)
 				return new WP_Error("database_connection", __("Database connection failed.", 'parking-management'));
 			$data = array();

@@ -119,6 +119,40 @@ function pkmgmt_init(): void
 	do_action('pkmgmt_init');
 }
 
+/**
+ * The migrate_2_to_3 .. migrate_to_4_11_0 chain below was written for, and
+ * relies on being run in lockstep with, a true historical upgrade: each step
+ * unconditionally overwrites properties assuming the exact old shape it
+ * expects is still there. On a normal release-to-release update that holds
+ * (the build workflow correctly bumps PKMGMT_VERSION to match each release
+ * tag - see .github/workflows/push-tag.yml + build.yml - it's only the
+ * git-committed source on `main` that keeps showing an old constant, since
+ * that bump is applied to the build artifact and never committed back).
+ * But anything that runs this plugin from a raw checkout instead of a
+ * packaged release (or any other scenario where the stored `version` option
+ * ends up behind the data's actual shape) would hit every one of these old
+ * migrations unconditionally, destructively nulling out real config (payment
+ * keys, mail/SMS templates, database credentials, ...) since they assume
+ * shapes that no longer exist. This checks for the one shape marker
+ * (`booking.mail_templates`, the target of migrate_3_7_to_4_0) that's present
+ * on any already-modern install, and skips the legacy chain entirely when
+ * it's there - a no-op when version tracking is already correct, a guard
+ * when it isn't.
+ */
+function pkmgmt_is_modern_schema(): bool
+{
+	$pm = getParkingManagementInstance();
+	if (!$pm || $pm->initial()) {
+		return true; // nothing to migrate from
+	}
+	$post_id = $pm->id();
+	if (!empty(get_post_meta($post_id, 'pkmgmt_sites', true))) {
+		return true; // already on 5.0+
+	}
+	$booking = get_post_meta($post_id, 'pkmgmt_booking', true);
+	return is_array($booking) && !empty($booking['mail_templates']);
+}
+
 add_action('admin_init', 'pkmgmt_upgrade', 10, 0);
 function pkmgmt_upgrade(): void
 {
@@ -128,38 +162,44 @@ function pkmgmt_upgrade(): void
 	if (version_compare($old_version, $new_version, '==')) {
 		return;
 	}
-	if (version_compare($old_version, '3.0.0', '<')) {
-		pkmgmt_migrate_2_to_3();
+
+	if (!pkmgmt_is_modern_schema()) {
+		if (version_compare($old_version, '3.0.0', '<')) {
+			pkmgmt_migrate_2_to_3();
+		}
+		if (version_compare($old_version, '3.1.0', '<')) {
+			pkmgmt_migrate_3_0_to_3_1();
+		}
+		if (version_compare($old_version, '3.6.0', '<')) {
+			pkmgmt_migrate_3_1_to_3_6();
+		}
+		if (version_compare($old_version, '3.7.0', '<')) {
+			pkmgmt_migrate_3_6_to_3_7();
+		}
+		if (version_compare($old_version, '4.0.0', '<')) {
+			pkmgmt_migrate_3_7_to_4_0();
+		}
+		if (version_compare($old_version, '4.2.1', '<')) {
+			pkmgmt_migrate_to_4_2_1();
+		}
+		if (version_compare($old_version, '4.3.0', '<')) {
+			pkmgmt_migrate_to_4_3_0();
+		}
+		if (version_compare($old_version, '4.3.5', '<')) {
+			pkmgmt_migrate_to_4_3_5();
+		}
+		if (version_compare($old_version, '4.5.0', '<')) {
+			pkmgmt_migrate_to_4_5_0();
+		}
+		if (version_compare($old_version, '4.9.0', '<')) {
+			pkmgmt_migrate_to_4_9_0();
+		}
+		if (version_compare($old_version, '4.11.0', '<')) {
+			pkmgmt_migrate_to_4_11_0();
+		}
 	}
-	if (version_compare($old_version, '3.1.0', '<')) {
-		pkmgmt_migrate_3_0_to_3_1();
-	}
-	if (version_compare($old_version, '3.6.0', '<')) {
-		pkmgmt_migrate_3_1_to_3_6();
-	}
-	if (version_compare($old_version, '3.7.0', '<')) {
-		pkmgmt_migrate_3_6_to_3_7();
-	}
-	if (version_compare($old_version, '4.0.0', '<')) {
-		pkmgmt_migrate_3_7_to_4_0();
-	}
-	if (version_compare($old_version, '4.2.1', '<')) {
-		pkmgmt_migrate_to_4_2_1();
-	}
-	if (version_compare($old_version, '4.3.0', '<')) {
-		pkmgmt_migrate_to_4_3_0();
-	}
-	if (version_compare($old_version, '4.3.5', '<')) {
-		pkmgmt_migrate_to_4_3_5();
-	}
-	if (version_compare($old_version, '4.5.0', '<')) {
-		pkmgmt_migrate_to_4_5_0();
-	}
-	if (version_compare($old_version, '4.9.0', '<')) {
-		pkmgmt_migrate_to_4_9_0();
-	}
-	if (version_compare($old_version, '4.11.0', '<')) {
-		pkmgmt_migrate_to_4_11_0();
+	if (version_compare($old_version, '5.0.0', '<')) {
+		pkmgmt_migrate_to_5_0_0();
 	}
 
 	do_action('pkmgmt_upgrade', $old_version, $new_version);
@@ -233,7 +273,7 @@ function pkmgmt_migrate_2_to_3(): void
 		foreach (['_info', '_database', '_divers', '_response', '_paypal', '_template', '_name', '_locale'] as $prop) {
 			delete_post_meta($pm->id(), $prop);
 		};
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		error_log("migration.save: " . $e->getMessage());
 	}
 }
@@ -262,7 +302,7 @@ function pkmgmt_migrate_3_0_to_3_1(): void
 	$pm->set_properties($props);
 	try {
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.3.0.to.3.1", $e->getMessage());
 	}
 }
@@ -289,7 +329,7 @@ function pkmgmt_migrate_3_1_to_3_6(): void
 	$pm->set_properties($props);
 	try {
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.3.1.to.3.6", $e->getMessage());
 	}
 }
@@ -349,7 +389,7 @@ function pkmgmt_migrate_3_6_to_3_7(): void
 	$pm->set_properties($props);
 	try {
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.3.1.to.3.6", $e->getMessage());
 	}
 }
@@ -436,7 +476,7 @@ function pkmgmt_migrate_3_7_to_4_0(): void
 	$pm->set_properties($props);
 	try {
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.3.7.to.4.0", $e->getMessage());
 	}
 
@@ -453,7 +493,7 @@ function pkmgmt_migrate_to_4_2_1(): void
 	$pm->set_properties($props);
 	try {
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.2.1", $e->getMessage());
 	}
 }
@@ -473,7 +513,7 @@ function pkmgmt_migrate_to_4_3_0(): void
 
 		$pm->set_properties($props);
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.3.0", $e->getMessage());
 	}
 }
@@ -491,7 +531,7 @@ function pkmgmt_migrate_to_4_3_5(): void
 
 		$pm->set_properties($props);
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.3.5", $e->getMessage());
 	}
 }
@@ -520,7 +560,7 @@ function pkmgmt_migrate_to_4_5_0(): void
 
 		$pm->set_properties($props);
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.5.0", $e->getMessage());
 	}
 }
@@ -545,7 +585,7 @@ function pkmgmt_migrate_to_4_9_0(): void
 
 		$pm->set_properties($props);
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.9.0", $e->getMessage());
 	}
 }
@@ -562,8 +602,120 @@ function pkmgmt_migrate_to_4_11_0(): void
 
 		$pm->set_properties($props);
 		$pm->save();
-	} catch (Exception $e) {
+	} catch (Throwable $e) {
 		Logger::error("migrate.to.4.11.0", $e->getMessage());
+	}
+}
+
+/**
+ * Pre-5.0 installs kept one global config split across the `info` (terminal/
+ * vehicle_type/type), `form`, `booked_dates`, `high_season`, `notification` and
+ * `booking`/`valet` properties. 5.0 replaces all of that with one or more
+ * independent "sites" (a site now owns its own terminal, tariffs, form options,
+ * booked dates, high season, notification and payment config, and mail/SMS
+ * templates - see Template::site_item()). This folds whatever was already
+ * configured into a single site, so an existing install keeps working
+ * immediately after the upgrade with zero manual reconfiguration.
+ *
+ * The `properties_available` list no longer includes the legacy properties, so
+ * $pm->prop(...) cannot see them any more - this reads the raw post meta directly.
+ */
+function pkmgmt_migrate_to_5_0_0(): void
+{
+	try {
+		$pm = getParkingManagementInstance();
+		if (!$pm || $pm->initial())
+			return;
+		$post_id = $pm->id();
+
+		if (!empty(get_post_meta($post_id, 'pkmgmt_sites', true))) {
+			return; // already migrated
+		}
+
+		$legacy_info = get_post_meta($post_id, 'pkmgmt_info', true);
+		$legacy_info = is_array($legacy_info) ? $legacy_info : [];
+		$legacy_form = get_post_meta($post_id, 'pkmgmt_form', true);
+		$legacy_form = is_array($legacy_form) ? $legacy_form : [];
+		$legacy_booking = get_post_meta($post_id, 'pkmgmt_booking', true);
+		$legacy_booking = is_array($legacy_booking) ? $legacy_booking : [];
+		$legacy_notification = get_post_meta($post_id, 'pkmgmt_notification', true);
+		$legacy_notification = is_array($legacy_notification) ? $legacy_notification : [];
+		$legacy_booked_dates = get_post_meta($post_id, 'pkmgmt_booked_dates', true);
+		$legacy_booked_dates = is_array($legacy_booked_dates) ? $legacy_booked_dates : [];
+		$legacy_high_season = get_post_meta($post_id, 'pkmgmt_high_season', true);
+		$legacy_high_season = is_array($legacy_high_season) ? $legacy_high_season : [];
+
+		if (empty($legacy_info) && empty($legacy_form) && empty($legacy_booking)) {
+			return; // fresh install, nothing to carry over
+		}
+
+		$site = Template::site_item();
+		$site['name'] = $pm->title ?: 'Site 1';
+		$site['active'] = '1';
+		$site['info']['address'] = $legacy_info['address'] ?? '';
+		$site['info']['mobile'] = $legacy_info['mobile'] ?? '';
+		$site['info']['RCS'] = $legacy_info['RCS'] ?? '';
+		$site['info']['email'] = $legacy_info['email'] ?? '';
+
+		if (!empty($legacy_info['type']) && is_array($legacy_info['type'])) {
+			$site['type'] = wp_parse_args($legacy_info['type'], $site['type']);
+		}
+		if (!empty($legacy_info['terminal'])) {
+			$airport = strtolower($legacy_info['terminal']);
+			$site['airport'] = in_array($airport, ['orly', 'roissy', 'orly2', 'orly3'], true) ? $airport : 'orly';
+		}
+		if (!empty($legacy_info['vehicle_type']) && is_array($legacy_info['vehicle_type'])) {
+			$site['vehicle_types'] = wp_parse_args($legacy_info['vehicle_type'], $site['vehicle_types']);
+		}
+
+		if (!empty($legacy_form)) {
+			$site['form']['indicative'] = $legacy_form['indicative'] ?? $site['form']['indicative'];
+			$site['form']['booking_page'] = $legacy_form['booking_page'] ?? $site['form']['booking_page'];
+			if (!empty($legacy_form['options']) && is_array($legacy_form['options'])) {
+				$site['form']['options'] = wp_parse_args($legacy_form['options'], $site['form']['options']);
+			}
+		}
+
+		if (!empty($legacy_booking)) {
+			$site['form']['validation_page'] = $legacy_booking['validation_page'] ?? $site['form']['validation_page'];
+			$site['form']['terms_and_conditions'] = $legacy_booking['options']['terms_and_conditions'] ?? $site['form']['terms_and_conditions'];
+			$site['form']['dialog_confirmation'] = $legacy_booking['options']['dialog_confirmation'] ?? $site['form']['dialog_confirmation'];
+			if (!empty($legacy_booking['payment']) && is_array($legacy_booking['payment'])) {
+				$site['payment'] = wp_parse_args($legacy_booking['payment'], $site['payment']);
+			}
+			$site['mail_templates'] = $legacy_booking['mail_templates'] ?? $site['mail_templates'];
+			$site['sms_template'] = $legacy_booking['sms_template'] ?? '';
+		}
+
+		$site['booked_dates'] = $legacy_booked_dates;
+		if (!empty($legacy_high_season)) {
+			$site['high_season'] = wp_parse_args($legacy_high_season, $site['high_season']);
+		}
+		if (!empty($legacy_notification)) {
+			$site['notification']['mail'] = $legacy_notification['mail'] ?? $site['notification']['mail'];
+			$site['notification']['sms'] = $legacy_notification['sms'] ?? $site['notification']['sms'];
+		}
+
+		$database = Template::get_default('database');
+		if (!empty($legacy_booking['database']) && array_filter($legacy_booking['database'])) {
+			$database = $legacy_booking['database'];
+		}
+
+		$props = $pm->get_properties();
+		$props['sites'] = [1 => $site];
+		$props['database'] = $database;
+		$props['info'] = [
+			'logs' => $legacy_info['logs'] ?? ['database' => '0', 'file' => '1', 'retention' => '30'],
+		];
+
+		$pm->set_properties($props);
+		$pm->save();
+
+		foreach (['pkmgmt_form', 'pkmgmt_booked_dates', 'pkmgmt_high_season', 'pkmgmt_notification', 'pkmgmt_booking', 'pkmgmt_valet', 'pkmgmt_locations'] as $legacy_key) {
+			delete_post_meta($post_id, $legacy_key);
+		}
+	} catch (Throwable $e) {
+		Logger::error("migrate.to.5.0.0", $e->getMessage());
 	}
 }
 

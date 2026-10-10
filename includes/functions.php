@@ -77,7 +77,7 @@ function pkmgmt_array_flatten(mixed $input): array
  * @param string $to Optional. The newline character that is used in the output.
  * @return string|array Processed value.
  */
-function pkmgmt_normalize_newline_deep(mixed $input, string $to = "\n"): string|array
+function pkmgmt_normalize_newline_deep(mixed $input, string $to = "\n"): mixed
 {
 	if (is_array($input)) {
 		$result = array();
@@ -89,7 +89,10 @@ function pkmgmt_normalize_newline_deep(mixed $input, string $to = "\n"): string|
 		return $result;
 	}
 
-	return pkmgmt_normalize_newline($input, $to);
+	// Non-string scalars (null, int, bool - e.g. a value missing from an
+	// older/shape-mismatched config during a migration) pass through unchanged
+	// instead of fataling against pkmgmt_normalize_newline()'s string type hint.
+	return is_string($input) ? pkmgmt_normalize_newline($input, $to) : $input;
 }
 
 /**

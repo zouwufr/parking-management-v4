@@ -10,3 +10,19 @@ payplug.log
 .mcp.json
 .swarm/
 CLAUDE.md
+
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+.agents
+.claude-flow
+.claude
+.swarm
+CLAUDE.md
+ruvector.db
+agentdb.rvf
+agentdb.rvf.lock

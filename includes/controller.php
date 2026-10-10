@@ -2,8 +2,6 @@
 
 namespace ParkingManagement;
 
-use Booking\ParkingType;
-
 class controller
 {
 	public function __construct()
@@ -36,27 +34,14 @@ class controller
 			return;
 		}
 		$booking = new Booking($pm);
-		$post = array_merge($_GET, $_POST);
-		$kind = 'booking';
-		if ($post['parking_type'] == ParkingType::VALET->value)
-			$kind = 'valet';
-		$booking->setKind($kind);
 		$booking->record();
 		exit(0);
 	}
 	private function home_form_redirect(): void
 	{
 		$post = array_merge($_GET, $_POST);
-		$pm = getParkingManagementInstance();
-		$form = $pm->prop('form');
-		$kind = 'booking';
-		if (isset($post['kind']) && !empty($post['kind']))
-			$kind = $post['kind'];
-
-		$page = match ($kind){
-			'booking' => $form['booking_page']['value'],
-			'valet' => $form['valet_page']['value'],
-		};
+		$site = \Booking\Site::current();
+		$page = $site['form']['booking_page']['value'] ?? '';
 		$url = sprintf($page."?parking_type=0&depart=%s 00:00&retour=%s 00:00", $post['depart'], $post['retour']);
 		wp_redirect($url);
 		exit(0);

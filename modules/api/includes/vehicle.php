@@ -2,7 +2,6 @@
 
 namespace ParkingManagement\API;
 
-use Booking\ParkingType;
 use Exception;
 use ParkingManagement\database\database;
 use ParkingManagement\Logger;
@@ -43,19 +42,19 @@ class Vehicle extends API
 	public function get_item($request): WP_Error|WP_REST_Response
 	{
 		try {
-			$kind = 'booking';
-			if ($request->has_param('parking_type') && $request['parking_type'] == ParkingType::VALET->value)
-				$kind = 'valet';
-			$conn = database::connect($kind);
+			$conn = database::connect();
 			if (!$conn)
 				return new WP_Error("database_connection", __("Database connection failed.", 'parking-management'));
 			$data = array();
-			if (! $results = $conn->get_results(
+			// Same fix as Destination::get_item() / Booked::getMaxLot(): get_results()
+			// returns an empty array both on a real failure and on a legitimate
+			// "no vehicle model matches this term" result - last_error is the real signal.
+			$results = $conn->get_results(
 				$conn->prepare(
 					"SELECT `tbl_modele`.`id_modele`, `tbl_modele`.`titre`, `tbl_marque`.`titre` as `marque` FROM `tbl_modele` LEFT JOIN `tbl_marque` ON `tbl_marque`.`id_marque` = `tbl_modele`.`marque_id` WHERE (`tbl_modele`.`titre` LiKE %s OR `tbl_modele`.`titre` LiKE %s) ORDER BY `tbl_marque`.`titre` , `tbl_modele`.`titre` ",
 					["%" . sansAccent($request['term']) . "%", "%" . slug($request['term']) . "%"]
-				), ARRAY_A)
-			) {
+				), ARRAY_A);
+			if (!empty($conn->last_error)) {
 				return new WP_Error("database_error", __("Database error.", 'parking-management'));
 			}
 			foreach ($results as $row) {

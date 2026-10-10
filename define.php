@@ -5,7 +5,7 @@ if (!defined('DS'))
 if (!defined('_PKMGMT'))
 	define('_PKMGMT', 1);
 if (!defined('PKMGMT_VERSION'))
-	define('PKMGMT_VERSION', '3.1.1');
+	define('PKMGMT_VERSION', '5.0.0');
 if (!defined('PKMGMT_REQUIRED_WP_VERSION'))
 	define('PKMGMT_REQUIRED_WP_VERSION', '6.3');
 if (!defined('PKMGMT_TEXT_DOMAIN'))

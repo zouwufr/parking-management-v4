@@ -2,6 +2,9 @@
 
 namespace ParkingManagement;
 
+use Booking\Order;
+use Booking\Site;
+use Exception;
 use JetBrains\PhpStorm\NoReturn;
 use ParkingManagement\interfaces\IParkingmanagement;
 use ParkingManagement\interfaces\IPayment;
@@ -21,9 +24,7 @@ class Payment implements IShortcode, IParkingManagement
 	private ParkingManagement $pm;
 	private string $provider = '';
 
-	private array $config;
-
-	private string $kind = 'booking';
+	private array $config = [];
 
 	private int $order_id = 0;
 
@@ -37,9 +38,9 @@ class Payment implements IShortcode, IParkingManagement
 	{
 		Logger::debug('payment.getInstanceProvider', ["provider" => $this->provider]);
 		return match ($this->provider) {
-			'mypos' => new MyPos($this->config, $this->kind, $this->order_id),
-			'stripe' => new Stripe($this->config, $this->kind, $this->order_id),
-			default => new Payplug($this->config, $this->kind, $this->order_id),
+			'mypos' => new MyPos($this->config, $this->order_id),
+			'stripe' => new Stripe($this->config, $this->order_id),
+			default => new Payplug($this->config, $this->order_id),
 		};
 	}
 
@@ -50,11 +51,12 @@ class Payment implements IShortcode, IParkingManagement
 		)
 			return '';
 		$this->order_id = (int)$_GET['order_id'];
+		$this->resolveSiteFromOrder();
 		if (!$this->isEnabled())
 			return '';
 		return match ($this->provider) {
 			'payplug', 'mypos', 'stripe' => $this->run_provider(),
-			default => sprintf('[parking-management type="payment" payment_provider="%s" kind="%s"]', $this->provider, $this->kind)
+			default => sprintf('[parking-management type="payment" payment_provider="%s"]', $this->provider)
 		};
 
 	}
@@ -72,29 +74,27 @@ class Payment implements IShortcode, IParkingManagement
 
 	public function isEnabled(): bool
 	{
-		return $this->config['enabled'] == '1';
+		return ($this->config['enabled'] ?? '0') == '1';
 	}
 
 	public function doRedirect(): bool
 	{
-		return $this->config['redirect-to-provider'] == '1';
+		return ($this->config['redirect-to-provider'] ?? '0') == '1';
 	}
 
-	public static function validateOnPayment($kind): bool
+	public static function validateOnPayment(array $site): bool
 	{
-		$pm = getParkingManagementInstance();
-		if (!$pm)
-			return false;
-		return match ($kind) {
-			'valet', 'booking' => ($pm->prop($kind)['payment']['valid-booking-on-payment'] === '1'),
-			default => false
-		};
+		return ($site['payment']['valid-on-payment'] ?? '0') === '1';
 	}
 
-	public function setKind(string $kind): void {
-		$this->kind = $kind;
-		$this->config = $this->pm->prop($kind)['payment'];
-		$this->provider = $this->config['name'];
+	/**
+	 * Configures this instance from an already-resolved site (used right after
+	 * order creation, in the same request, where the site is already known).
+	 */
+	public function setSite(array $site): void
+	{
+		$this->config = $site['payment'] ?? [];
+		$this->provider = $this->config['name'] ?? 'payplug';
 	}
 
 	public function setOrderId(int $order_id): void
@@ -102,9 +102,27 @@ class Payment implements IShortcode, IParkingManagement
 		$this->order_id = $order_id;
 	}
 
+	/**
+	 * Resolves the site from the order's own `parking_id` - used whenever Payment
+	 * is reached outside the original booking request (payment page, provider
+	 * redirect back, webhook), where there is no `site_id` in the current request.
+	 */
+	private function resolveSiteFromOrder(): void
+	{
+		$site = null;
+		try {
+			$order = new Order();
+			$row = $order->read($this->order_id);
+			$site = Site::find($row['parking_id']);
+		} catch (Exception $e) {
+			Logger::error('payment.resolveSiteFromOrder', $e->getMessage());
+		}
+		$this->setSite($site ?? Site::defaultSite() ?? []);
+	}
+
 	public function updatePaymentStatus(): bool
 	{
 		if ( ($this->provider !== 'stripe') || (empty($_GET['session_id']))) return false;
-		return Stripe::updatePaymentStatus($this->config, $this->kind, $this->order_id);
+		return Stripe::updatePaymentStatus($this->config, $this->order_id);
 	}
 }

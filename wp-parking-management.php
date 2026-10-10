@@ -5,7 +5,7 @@
  * Author: David ALEXANDRE
  * License: GPL2 license
  * URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Version: 3.1.1
+ * Version: 5.0.0
  * Requires at least: 6.3
  * Requires PHP: 8.1
  */

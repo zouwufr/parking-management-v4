@@ -3,6 +3,7 @@
 namespace ParkingManagement\API;
 
 use Booking\Order;
+use Booking\Site;
 use Exception;
 use Mypos\IPC\Config;
 use Mypos\IPC\Defines;
@@ -33,6 +34,7 @@ class MyPosAPI extends API
 			'callback' => [$this, 'create_item'],
 			'permission_callback' => '__return_true',
 			'args' => [
+				'site_id' => ['required' => false],
 				'any_param' => ['required' => false]
 			]
 		]);
@@ -57,24 +59,18 @@ class MyPosAPI extends API
 				'POST' => $_POST,
 			]
 		]);
-		$kind = $request->get_param('kind');
-		if ($kind === null) {
-			Logger::error("mypos.api.create_item", ["message" => "missing kind"]);
+		$site_id = $request->get_param('site_id');
+		$site = $site_id !== null ? Site::find($site_id) : null;
+		if ($site === null) {
+			Logger::error("mypos.api.create_item", ["message" => "missing or invalid site_id"]);
 			return new WP_Error(
 				'mypos-notification-error',
 				'Missing parameter',
 				array('status' => WP_Http::BAD_REQUEST)
 			);
 		}
-		$pm = getParkingManagementInstance();
-		if (!$pm)
-			return new WP_Error(
-				'get-parking-management-instance',
-				__('failed to get parking management instance', 'parking-management'),
-				array('status' => WP_Http::BAD_REQUEST)
-			);
-		$payment = $pm->prop($kind)['payment'];
-		$provider = $payment['providers']['mypos'];
+		$payment = $site['payment'];
+		$provider = $payment['properties']['mypos'];
 		$test_enabled = $payment['active-test'] == '1';
 		$configPackage = $test_enabled ? MyPos::configTest : $provider['configuration_package']['value'];
 		$ipcURL = $test_enabled ? MyPos::ipcTestURL : MyPos::ipcURL;
@@ -104,7 +100,7 @@ class MyPosAPI extends API
 				$payment_date = $data['RequestDateTime'];
 				$amount = $data['Amount'];
 				$payment_id = PaymentID::MYPOS;
-				$order = new Order($kind);
+				$order = new Order();
 				$order->update_payment((int)$order_id, $payment_date, $amount, $payment_id);
 				Logger::info("mypos.api.create", "record payment status recorded");
 				echo "OK";

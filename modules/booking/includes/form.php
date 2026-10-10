@@ -10,11 +10,13 @@ class Form
 {
 	private ParkingManagement $pm;
 
-	private string $kind;
+	private array $site;
 
 	public function __construct(ParkingManagement $pm)
 	{
 		$this->pm = $pm;
+		$this->site = Site::current() ?? [];
+		$this->enqueue();
 	}
 
 	private static function _radio_parking_type_field($div_class, $id, $name, array $elements, $value): string
@@ -67,126 +69,69 @@ class Form
 		);
 	}
 
-	private function get_parking_type(ParkingManagement $pm): array
+	/**
+	 * Always renders all three - site restrictions are enforced client-side (JS
+	 * toggles visibility per the currently selected site), since switching sites
+	 * must be able to reveal options the page's initial/default site doesn't offer.
+	 * Previously this filtered by $this->site['type'] at render time, which meant a
+	 * site needing an option the default site didn't have (e.g. the default site has
+	 * no valet) could never show it - the radio simply didn't exist in the DOM to
+	 * toggle, so switching to that site left the selection stuck with nothing valid
+	 * to fall back to.
+	 */
+	private function get_parking_type(): array
 	{
-		$types = array();
-		$info = $pm->prop('info');
-		if (!empty($info) && is_array($info) && array_key_exists('type', $info)) {
-			if (array_key_exists('ext', $info['type']) && $info['type']['ext'] === '1')
-				$types[] = array(
-					'id' => '1',
-					'label' => esc_html__('Outside', 'parking-management'),
-					'value' => '0'
-				);
-			if (array_key_exists('int', $info['type']) && $info['type']['int'] === '1')
-				$types[] = array(
-					'id' => '2',
-					'label' => esc_html__('Inside', 'parking-management'),
-					'value' => '1'
-				);
-			if (array_key_exists('valet', $info['type']) && $info['type']['valet'] === '1')
-				$types[] = array(
-					'id' => '3',
-					'label' => esc_html__('Valet', 'parking-management'),
-					'value' => '2'
-				);
-		}
-		return $types;
+		return array(
+			array('id' => '1', 'label' => esc_html__('Outside', 'parking-management'), 'value' => '0'),
+			array('id' => '2', 'label' => esc_html__('Inside', 'parking-management'), 'value' => '1'),
+			array('id' => '3', 'label' => esc_html__('Valet', 'parking-management'), 'value' => '2'),
+		);
 	}
 
-	private function get_vehicle_type(ParkingManagement $pm): array
+	/** Same reasoning as get_parking_type() above. */
+	private function get_vehicle_type(): array
 	{
-		$types = array();
-		$info = $pm->prop('info');
-		if (!empty($info) && is_array($info) && array_key_exists('vehicle_type', $info)) {
-			if (array_key_exists('car', $info['vehicle_type']) && $info['vehicle_type']['car'] === '1')
-				$types[] = array(
-					'id' => '1',
-					'label' => '<i class="fa fa-car fa-lg"></i>',
-					'value' => '1'
-				);
-			if (array_key_exists('motorcycle', $info['vehicle_type']) && $info['vehicle_type']['motorcycle'] === '1')
-				$types[] = array(
-					'id' => '2',
-					'label' => '<i class="fa fa-motorcycle fa-lg"></i>',
-					'value' => '2'
-				);
-			if (array_key_exists('truck', $info['vehicle_type']) && $info['vehicle_type']['truck'] === '1')
-				$types[] = array(
-					'id' => '3',
-					'label' => '<i class="fa fa-truck fa-lg"></i>',
-					'value' => '3'
-				);
+		return array(
+			array('id' => '1', 'label' => '<i class="fa fa-car fa-lg"></i>', 'value' => '1'),
+			array('id' => '2', 'label' => '<i class="fa fa-motorcycle fa-lg"></i>', 'value' => '2'),
+			array('id' => '3', 'label' => '<i class="fa fa-truck fa-lg"></i>', 'value' => '3'),
+		);
+	}
+
+	/** First parking_type value Site::current() actually enables, for the initial checked radio. */
+	private function defaultParkingTypeValue(): string
+	{
+		$type = $this->site['type'] ?? [];
+		foreach (array('ext' => '0', 'int' => '1', 'valet' => '2') as $key => $value) {
+			if (($type[$key] ?? '0') === '1') {
+				return $value;
+			}
 		}
-		return $types;
+		return '0';
+	}
+
+	/** First vehicle type value Site::current() actually enables, for the initial checked radio. */
+	private function defaultVehicleTypeValue(): string
+	{
+		$vehicle_type = $this->site['vehicle_types'] ?? [];
+		foreach (array('car' => '1', 'motorcycle' => '2', 'truck' => '3') as $key => $value) {
+			if (($vehicle_type[$key] ?? '0') === '1') {
+				return $value;
+			}
+		}
+		return '1';
 	}
 
 
-	private static function get_terminal(ParkingManagement $pm): array
+	private function get_terminal(): array
 	{
-		$info = $pm->prop('info');
-		$terminal = 'Orly';
-		if (!empty($info) && is_array($info) && array_key_exists('terminal', $info))
-			$terminal = $info['terminal'];
+		$airport = Terminal::fromKey($this->site['airport'] ?? 'orly');
 
-		return match ($terminal) {
-			'Roissy', 'roissy' => array(
-				'group' => array(
-					'Roissy' => array(
-						array(
-							'value' => "3",
-							'label' => 'Terminal 1',
-						),
-						array(
-							'value' => "4",
-							'label' => 'Terminal 3'
-						),
-						array(
-							'value' => "5",
-							'label' => 'Terminal 2A'
-						),
-						array(
-							'value' => "6",
-							'label' => 'Terminal 2B'
-						),
-						array(
-							'value' => "7",
-							'label' => 'Terminal 2C'
-						),
-						array(
-							'value' => "8",
-							'label' => 'Terminal 2D'
-						),
-						array(
-							'value' => "9",
-							'label' => 'Terminal 2E'
-						),
-						array(
-							'value' => "10",
-							'label' => 'Terminal 2F'
-						),
-						array(
-							'value' => "11",
-							'label' => 'Terminal 2G'
-						)
-					)
-				)
-			),
-			default => array(
-				'group' => array(
-					'Orly' => array(
-						array(
-							'value' => "1",
-							'label' => 'Terminal 4',
-						),
-						array(
-							'value' => "2",
-							'label' => 'Terminal 1,2,3'
-						)
-					)
-				)
+		return array(
+			'group' => array(
+				Terminal::label($airport) => Terminal::forAirport($airport)
 			)
-		};
+		);
 	}
 
 	private static function _label($for, $contents): string
@@ -202,7 +147,7 @@ class Form
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/booking/css/form.css'));
+		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/booking/css/form.css'), array(), PKMGMT_VERSION);
 		wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css', array(), '6.0.0-beta3');
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array(), '5.3.3');
 		wp_enqueue_style('parking-management-easepick', 'https://cdn.jsdelivr.net/npm/@easepick/bundle@1.2.1/dist/index.css');
@@ -229,25 +174,36 @@ class Form
 				'parking-management-intl-tel-input',
 			),
 			PKMGMT_VERSION);
-		$properties = $this->pm->get_properties();
-		unset($properties['booking']['payment']);
-		unset($properties['valet']['payment']);
-		unset($properties['booking']['database']);
-		unset($properties['valet']['database']);
-		unset($properties['booking']['mail_templates']);
-		unset($properties['valet']['mail_templates']);
-		unset($properties['booking']['sms_template']);
-		unset($properties['valet']['sms_template']);
-		unset($properties['notification']);
+
+		$sites = array();
+		foreach (Site::activeOnly() as $id => $site) {
+			$sites[$id] = array(
+				'name' => $site['name'] ?? '',
+				'type' => $site['type'] ?? [],
+				'airport' => $site['airport'] ?? 'orly',
+				'terminal' => $site['terminal'] ?? '',
+				'vehicle_types' => $site['vehicle_types'] ?? [],
+				'options' => array_intersect_key(
+					$site['form']['options'] ?? [],
+					array_flip(array_merge(['keep_keys'], self::CHECKBOX_OPTION_KEYS))
+				),
+			);
+		}
+		$terminals = array();
+		foreach (Airport::cases() as $airport) {
+			$terminals[strtolower($airport->name)] = Terminal::forAirport($airport);
+		}
 		wp_localize_script('parking-management-booking',
 			'external_object',
 			array(
 				'locale' => $this->pm->locale,
 				'home_url' => home_url(),
-				'kind' => $this->kind,
+				'site_id' => $this->site['id'] ?? '',
 				'form_css' => pkmgmt_plugin_url('modules/booking/css/form.css'),
-				'form_options' => $properties[$this->kind]['options'],
-				'properties' => $properties
+				'indicative' => $this->site['form']['indicative'] ?? '',
+				'form_options' => $this->site['form']['options'] ?? [],
+				'sites' => $sites,
+				'terminals' => $terminals,
 			)
 		);
 
@@ -256,7 +212,7 @@ class Form
 	public function common_personal_information(ParkingManagement $pm): array
 	{
 		$post = array_merge($_GET, $_POST);
-		$vehicle_type = $this->get_vehicle_type($pm);
+		$vehicle_type = $this->get_vehicle_type();
 
 		$content = [
 			self::_row_field('name',
@@ -333,40 +289,38 @@ class Form
 				),
 			),
 		];
-		$content[] = Html::_index('hidden', 'kind', 'kind', ['value' => $this->kind]);
-		if ($this->kind === 'valet') {
-			$content[] = Html::_index('hidden', 'type_id', 'type_id', ['value' => VehicleType::CAR->value]);
-		} else {
-			if (count($vehicle_type) == 1)
-				$content[] = Html::_index('hidden', 'type_id', 'type_id', ['value' => $vehicle_type[0]->id]);
-			$content[] = self::_row_field('type-id input-group align-items-center',
-				Html::_label_with_attr(
-					array('class' => 'type_id col-sm-3 form form-label'),
-					'type_id',
-					esc_html__('Type of vehicle', 'parking-management')
+		$content[] = self::_row_field('type-id input-group align-items-center',
+			Html::_label_with_attr(
+				array('class' => 'type_id col-sm-3 form form-label'),
+				'type_id',
+				esc_html__('Type of vehicle', 'parking-management')
+			),
+			Html::_div(
+				array(
+					'class' => 'row col col-sm-5 col-md-8 gx-sm-4 gx-md-5 justify-content-around',
 				),
-				Html::_div(
-					array(
-						'class' => 'row col col-sm-5 col-md-8 gx-sm-4 gx-md-5 justify-content-around',
-					),
-					self::_radio_type_field(
-						'col col-sm d-flex justify-content-around p-0',
-						'type_id',
-						'type_id',
-						$vehicle_type,
-						($post['type_id'] ?? $vehicle_type[0]['value']))
-				)
-			);
-		}
-		$form = $this->pm->prop('form');
-		if ($form['options']['keep_keys']['enabled'] === '1' && $form['options']['keep_keys']['price'] !== '0' && !empty($form['options']['keep_keys']['label']) && ($this->kind !== 'valet')) {
-			$msg = sprintf(esc_html__($form['options']['keep_keys']['label'], 'parking-management'), $form['options']['keep_keys']['price']);
-			$content[] = Html::_switch(
+				self::_radio_type_field(
+					'col col-sm d-flex justify-content-around p-0',
+					'type_id',
+					'type_id',
+					$vehicle_type,
+					($post['type_id'] ?? $this->defaultVehicleTypeValue()))
+			)
+		);
+		// Always rendered (not gated on this site's enabled/price/label) so switching to a
+		// site with a different keep_keys config has an element to show/hide/relabel -
+		// same reasoning as get_parking_type()/get_vehicle_type() above.
+		$form = $this->site['form'] ?? [];
+		$keep_keys = $form['options']['keep_keys'] ?? [];
+		$keep_keys_label = $keep_keys['label'] ?? esc_html__('I will keep my keys for %s €', 'parking-management');
+		$content[] = Html::_div(
+			array('class' => 'option-wrapper', 'data-option' => 'keep_keys'),
+			Html::_switch(
 				'keep_keys',
 				'keep_keys', [],
-				$msg,
-				array_key_exists('keep_keys', $post) ? $post['keep_keys']: $form['options']['keep_keys']['checked']);
-		}
+				sprintf(esc_html__($keep_keys_label, 'parking-management'), $keep_keys['price'] ?? 0),
+				array_key_exists('keep_keys', $post) ? $post['keep_keys'] : ($keep_keys['checked'] ?? '0'))
+		);
 		return array_merge($content,
 			[
 				Html::_p([
@@ -405,30 +359,26 @@ class Form
 	public function personal_information(): string
 	{
 		$post = array_merge($_GET, $_POST);
-		$parking_type = $this->get_parking_type($this->pm);
+		$parking_type = $this->get_parking_type();
 		$content = $this->common_personal_information($this->pm);
-		if ($this->kind === 'valet') {
-			$content[] = Html::_index('hidden', 'parking_type', 'parking_type', ['value' => ParkingType::VALET->value]);
-		} else {
-			$content[] = self::_row_field('parking_type input-group align-items-center',
-				Html::_label_with_attr(
-					array('class' => 'parking_type col-sm-3 form form-label'),
-					'parking_type',
-					esc_html__('Car Park', 'parking-management')
+		$content[] = self::_row_field('parking_type input-group align-items-center',
+			Html::_label_with_attr(
+				array('class' => 'parking_type col-sm-3 form form-label'),
+				'parking_type',
+				esc_html__('Car Park', 'parking-management')
+			),
+			Html::_div(
+				array(
+					'class' => 'col col-sm-5 col-md-8 row justify-content-around',
 				),
-				Html::_div(
-					array(
-						'class' => 'col col-sm-5 col-md-8 row justify-content-around',
-					),
-					self::_radio_parking_type_field(
-						'col-sm d-flex justify-content-around',
-						'parking_type',
-						'parking_type',
-						$parking_type,
-						($post['parking_type'] ?? $parking_type[0]['value']))
-				)
-			);
-		}
+				self::_radio_parking_type_field(
+					'col-sm d-flex justify-content-around',
+					'parking_type',
+					'parking_type',
+					$parking_type,
+					($post['parking_type'] ?? $this->defaultParkingTypeValue()))
+			)
+		);
 		return Html::_div(
 			array('class' => 'personal-information col-12'),
 			Html::_fieldset(
@@ -498,10 +448,45 @@ class Form
 		);
 	}
 
+	private function get_sites(): array
+	{
+		$options = array();
+		foreach (Site::activeOnly() as $id => $site) {
+			$options[] = array(
+				'value' => (string)$id,
+				'label' => $site['name'] ?? '',
+			);
+		}
+		return $options;
+	}
+
+	private function site_field(): array
+	{
+		$sites = $this->get_sites();
+		if (empty($sites)) {
+			return array();
+		}
+		$post = array_merge($_GET, $_POST);
+		return [
+			self::_row_field('site_id',
+				self::_label('site_id', esc_html__('Location', 'parking-management')),
+				Html::_select('site_id', 'site_id',
+					array(
+						'class' => 'site-select required border rounded py-2 px-3 form-select',
+						'tabindex' => "9",
+					),
+					$sites,
+					$post['site_id'] ?? $sites[0]['value']
+				)
+			),
+		];
+	}
+
 	private function common_trip(ParkingManagement $pm): array
 	{
 		$post = array_merge($_GET, $_POST);
 		return [
+			...$this->site_field(),
 			self::_row_field('destination',
 				self::_label('destination', esc_html__('Destination', 'parking-management')),
 				Html::_index('text', 'destination', 'destination',
@@ -553,7 +538,7 @@ class Form
 									'class' => 'border form-select py-2',
 									'tabindex' => "11",
 								),
-								self::get_terminal($pm),
+								$this->get_terminal(),
 								(array_key_exists('terminal', $post) && $post['terminal']['depart'] ?? '')),
 
 						),
@@ -569,7 +554,7 @@ class Form
 									'class' => 'border form-select py-2',
 									'tabindex' => "13",
 								),
-								self::get_terminal($pm),
+								$this->get_terminal(),
 								(array_key_exists('terminal', $post) && $post['terminal']['arrivee'] ?? '')),
 						),
 					),
@@ -616,11 +601,8 @@ class Form
 
 	public function trip_information(): string
 	{
-		$post = array_merge($_GET, $_POST);
 		$content = $this->common_trip($this->pm);
-		if ($this->kind === 'booking') {
-			$content[] = $this->pax();
-		}
+		$content[] = $this->pax();
 		return Html::_div(
 			array('class' => 'trip_information'),
 			Html::_fieldset(
@@ -633,8 +615,8 @@ class Form
 
 	public function cgv(): string
 	{
-		$config = $this->pm->prop($this->kind);
-		if ($config['options']['terms_and_conditions'] !== '1')
+		$form = $this->site['form'] ?? [];
+		if (($form['terms_and_conditions'] ?? '0') !== '1')
 			return '';
 		$post = array_merge($_GET, $_POST);
 		$warning_msg = "Merci de valider les conditions générales de vente";
@@ -665,6 +647,7 @@ EOT;
 
 	public function total(): string
 	{
+		$post = array_merge($_GET, $_POST);
 		return Html::_div(
 			array(),
 			Html::_index('hidden', 'total_amount', 'total_amount',
@@ -683,7 +666,6 @@ EOT;
 
 	public function submit(): string
 	{
-		$info = $this->pm->prop('info');
 		return Html::_div(
 			array(
 				'class' => 'mt-4 row justify-content-md-center',
@@ -691,7 +673,7 @@ EOT;
 			Html::_div(array(
 				'class' => 'col-sm-4',
 			),
-				Html::_index('hidden', 'aeroport', 'aeroport', array('value' => Order::getSiteID($info['terminal'])->value)),
+				Html::_index('hidden', 'aeroport', 'aeroport', array('value' => Order::getSiteID($this->site['airport'] ?? 'orly')->value)),
 				Html::_index('hidden', 'pkmgmt_action', 'pkmgmt_action', array('value' => 'booking')),
 				'<button type="submit" tabindex="17" id="submit" name="submit" class="form-control btn btn-primary text-center" disabled>'
 				. esc_html__('Pay and validate', 'parking-management')
@@ -706,9 +688,8 @@ EOT;
 	public function dialog_booking_confirmation(): string
 	{
 		$post = array_merge($_GET, $_POST);
-		$config = $this->pm->prop($this->kind);
-		if (!isset($config['options']['dialog_confirmation']) ||
-			$config['options']['dialog_confirmation'] != '1') {
+		$form = $this->site['form'] ?? [];
+		if (($form['dialog_confirmation'] ?? '0') != '1') {
 			return '';
 		}
 		return '<div id="dialog_booking_confirmation" title="' . esc_html__('Confirmation', 'parking-management') . '">
@@ -741,19 +722,25 @@ EOT;
 </div>';
 	}
 
+	// The other Template::form_options() keys (night_extra_charge, shuttle, late,
+	// holiday, forgetting, extra_baggage, oversize_baggage) apply automatically in
+	// Price::getPrice() based on date/time/pax, not an opt-in checkbox here.
+	private const CHECKBOX_OPTION_KEYS = ['ev_charging', 'cancellation_insurance'];
+
 	public function options(): string
 	{
-		$form = $this->pm->prop('form');
+		// Always rendered (not gated on this site's enabled/price) so switching to a site
+		// with a different config has an element to show/hide/relabel client-side - same
+		// reasoning as get_parking_type()/get_vehicle_type() and keep_keys above.
+		$form = $this->site['form'] ?? [];
 
 		$post = array_merge($_GET, $_POST);
 		$contents = [];
-		foreach ($form['options'] as $key => $value) {
-			if ($value['enabled'] !== '1' || $value['price'] === '0' || empty($value['label']) || $key == 'keep_keys') {
-				continue;
-			}
-			$msg = sprintf(esc_html__($value['label'], 'parking-management'), $value['price']);
+		foreach (self::CHECKBOX_OPTION_KEYS as $key) {
+			$value = $form['options'][$key] ?? [];
+			$msg = sprintf(esc_html__($value['label'] ?? '%s €', 'parking-management'), $value['price'] ?? 0);
 			$contents[] = Html::_div(
-				array('class' => 'options-container form-check'),
+				array('class' => 'options-container form-check', 'data-option' => $key),
 				Html::_index('hidden', '', $key, array('value' => '0')),
 				Html::_index(
 					'checkbox',
@@ -765,7 +752,7 @@ EOT;
 					],
 					false,
 					false,
-					(array_key_exists($key, $post) ? $post[$key] : $value['checked']) == '1'
+					(array_key_exists($key, $post) ? $post[$key] : ($value['checked'] ?? '0')) == '1'
 				),
 				Html::_label_with_attr(array('class' => 'form-check-label black'), $key, $msg)
 			);
@@ -782,12 +769,6 @@ EOT;
 				),
 			)
 		);
-	}
-
-	public function setKind(string $kind): void
-	{
-		$this->kind = $kind;
-		$this->enqueue();
 	}
 
 }

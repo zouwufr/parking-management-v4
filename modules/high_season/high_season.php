@@ -2,6 +2,7 @@
 
 namespace ParkingManagement;
 
+use Booking\Site;
 use DateTime;
 use DateTimeZone;
 use Exception;
@@ -23,23 +24,27 @@ class HighSeason implements IShortcode, IParkingmanagement
 	public function shortcode(string $type): string
 	{
 		$this->enqueue();
-		return self::HTMLMessage($this->pm);
+		$site = Site::current();
+		if ($site === null) {
+			return '';
+		}
+		return self::HTMLMessage($site, $this->pm->locale);
 	}
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-high-season', pkmgmt_plugin_url('modules/high_season/css/style.css'));
+		wp_enqueue_style('parking-management-high-season', pkmgmt_plugin_url('modules/high_season/css/style.css'), array(), PKMGMT_VERSION);
 	}
-	private static function HTMLMessage(ParkingManagement $pm): string
+	private static function HTMLMessage(array $site, string $locale): string
 	{
 		try {
-			$high_season = $pm->prop('high_season');
+			$high_season = $site['high_season'] ?? [];
 			if (!array_key_exists('dates', $high_season))
 				return '';
 			$zone = new DateTimeZone("Europe/Paris");
 			$date = new DateTime( 'now', $zone);
 			$hs = DatesRange::getDateRange($date->format('Y-m-d'), $high_season['dates']);
-			$message = DatesRange::getMessage($hs, $pm->locale);
+			$message = DatesRange::getMessage($hs, $locale);
 			if (empty($message)) {
 				return '';
 			}
@@ -54,20 +59,15 @@ class HighSeason implements IShortcode, IParkingmanagement
 		return '';
 	}
 
-	public static function is($date): bool
+	public static function is($date, ?array $site = null): bool
 	{
-		$pm = getParkingManagementInstance();
-		if (!$pm)
+		$site = $site ?? Site::current();
+		if ($site === null)
 			return false;
-		$high_season = $pm->prop('high_season');
+		$high_season = $site['high_season'] ?? [];
 		if (!array_key_exists('dates', $high_season))
 			return false;
 		return DatesRange::isContain($date, $high_season['dates']);
-	}
-
-	public function setKind(string $kind): void
-	{
-		// TODO: Implement setKind() method.
 	}
 }
 

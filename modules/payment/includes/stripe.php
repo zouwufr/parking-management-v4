@@ -24,17 +24,15 @@ class Stripe implements IPayment
 	private int $order_id;
 	private array $config;
 	private array $properties;
-	private string $kind;
 	private string $payment_url;
 	private float $amount;
 
 
-	public function __construct(array $config, string $kind, int $order_id)
+	public function __construct(array $config, int $order_id)
 	{
 		$this->order_id = $order_id;
 		$this->config = $config;
 		$this->properties = $config['properties']['stripe'];
-		$this->kind = $kind;
 		$this->payment_url = $this->initPayment();
 	}
 
@@ -51,7 +49,7 @@ class Stripe implements IPayment
 		exit(0);
 	}
 
-	public static function updatePaymentStatus($config, $kind, $order_id): bool
+	public static function updatePaymentStatus($config, $order_id): bool
 	{
 		try {
 			$properties = $config['properties']['stripe'];
@@ -68,9 +66,7 @@ class Stripe implements IPayment
 			// Verify the session metadata matches the expected order to prevent tampering
 			if (
 				!isset($session->metadata['id_commande']) ||
-				(int)$session->metadata['id_commande'] !== (int)$order_id ||
-				!isset($session->metadata['kind']) ||
-				$session->metadata['kind'] !== $kind
+				(int)$session->metadata['id_commande'] !== (int)$order_id
 			) {
 				Logger::warning("stripe.updatePaymentStatus", ["message" => "session metadata mismatch", "order_id" => $order_id]);
 				return false;
@@ -88,7 +84,7 @@ class Stripe implements IPayment
 				'amount' => $amount,
 				'payment_id' => $payment_id
 			]);
-			$order = new Order($kind);
+			$order = new Order();
 			$order->update_payment($order_id, date('Y-m-d H:i:s'), $amount, $payment_id);
 			Logger::info("stripe.updatePaymentStatus", "update payment status recorded");
 			return true;
@@ -110,8 +106,8 @@ class Stripe implements IPayment
 	{
 		$data = [];
 		try {
-			$member = new Member($this->kind);
-			$order = new Order($this->kind);
+			$member = new Member();
+			$order = new Order();
 			$data['post'] = $_POST;
 			$data['order'] = $order->read($this->order_id);
 			if ($data['order']['paye'] == $data['order']['total'])
@@ -122,8 +118,8 @@ class Stripe implements IPayment
 			$secretKey = $test_enabled ? $this->properties['secret_key_test']['value'] : $this->properties['secret_key']['value'];
 			$customer = $this->getOrCreateClient($secretKey, $data);
 			Logger::debug("stripe.initPayment", ['customer' => $customer]);
-			$success_url = $this->properties['success_page']['value'] . "?from=provider&kind={$this->kind}&order_id={$this->order_id}" . '&session_id={CHECKOUT_SESSION_ID}';
-			$cancel_url = $this->properties['cancel_page']['value'] . "?kind={$this->kind}&order_id={$this->order_id}";
+			$success_url = $this->properties['success_page']['value'] . "?from=provider&order_id={$this->order_id}" . '&session_id={CHECKOUT_SESSION_ID}';
+			$cancel_url = $this->properties['cancel_page']['value'] . "?order_id={$this->order_id}";
 			$stripe = new StripeClient($secretKey);
 			$checkout_session = $stripe->checkout->sessions->create([
 				'customer' => $customer->id,
@@ -145,7 +141,6 @@ class Stripe implements IPayment
 				'cancel_url' => $cancel_url,
 				'automatic_tax' => ['enabled' => true],
 				'metadata' => [
-					'kind' => $this->kind,
 					'id_commande' => $this->order_id,
 				]
 			]);

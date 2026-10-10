@@ -2,6 +2,8 @@
 
 namespace ParkingManagement\Admin;
 
+use Booking\Airport;
+use Booking\Terminal;
 use Exception;
 use ParkingManagement\ParkingManagement;
 use ParkingManagement\Template;
@@ -35,8 +37,8 @@ class Admin
 		global $plugin_page;
 		$screen_id = $plugin_page;
 		// CSS
-		wp_enqueue_style('parking-management-admin', pkmgmt_plugin_url('admin/css/admin.css'));
-		wp_enqueue_style('parking-management-admin-rtl', pkmgmt_plugin_url('admin/css/admin-rtl.css'));
+		wp_enqueue_style('parking-management-admin', pkmgmt_plugin_url('admin/css/admin.css'), array(), PKMGMT_VERSION);
+		wp_enqueue_style('parking-management-admin-rtl', pkmgmt_plugin_url('admin/css/admin-rtl.css'), array(), PKMGMT_VERSION);
 		wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css', array(), '6.0.0-beta3');
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array('admin-menu', 'forms'), '5.3.3');
 		wp_enqueue_style('parking-management-jquery-ui', 'https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/themes/base/jquery-ui.min.css');
@@ -73,6 +75,26 @@ class Admin
 			'parking-management-admin-bottom',
 			'config',
 			['screen_id' => $screen_id]
+		);
+
+		$terminals = array();
+		foreach (Airport::cases() as $airport) {
+			$terminals[strtolower($airport->name)] = Terminal::forAirport($airport);
+		}
+		wp_localize_script(
+			'parking-management-admin',
+			'pkmgmt_sites_config',
+			array(
+				'airports' => Terminal::airportOptions(),
+				'terminals' => $terminals,
+				'vehicle_types' => array(
+					'car' => __('Car', 'parking-management'),
+					'motorcycle' => __('Motorcycle', 'parking-management'),
+					'truck' => __('Truck', 'parking-management'),
+				),
+				'rest_url' => esc_url_raw(rest_url('pkmgmt/v1/')),
+				'nonce' => wp_create_nonce('wp_rest'),
+			)
 		);
 	}
 

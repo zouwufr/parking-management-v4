@@ -8,19 +8,13 @@ use ParkingManagement\Logger;
 
 class SMS {
 
-	public static function send(string $phone, string $message): bool
+	public static function send(array $sms, string $phone, string $message): bool
 	{
 		if (empty($message)) {
 			Logger::error("Message cannot be empty");
 			return false;
 		}
-		$pm = getParkingManagementInstance();
-		if (!$pm) {
-			Logger::error("sms.send", "failed to find parking management instance");
-			return false;
-		}
-		$sms = $pm->prop('notification')['sms'] ?? null;
-		if (!$sms) {
+		if (empty($sms)) {
 			Logger::error("sms.send", "missing SMS configuration");
 			return false;
 		}

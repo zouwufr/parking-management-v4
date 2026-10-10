@@ -20,8 +20,7 @@ class Order
 	private string $airport;
 	private int $site_id;
 	private array $data;
-
-	private string $kind;
+	private ?array $site;
 
 	private ParkingManagement $pm;
 
@@ -39,18 +38,19 @@ class Order
 	/**
 	 * @throws Exception
 	 */
-	public function __construct(string $kind)
+	public function __construct()
 	{
 		$pm = getParkingManagementInstance();
 		$this->pm = $pm;
-		$this->kind = $kind;
-		$info = $pm->prop('info');
-		if (empty($info))
-			throw new Exception('Parking management info property is empty.');
-		$this->conn = database::connect($kind);
-		$this->airport = $info['terminal'];
-		$this->site_id = self::getSiteID($info['terminal'])->value;
+		$this->conn = database::connect();
 		$this->data = $_POST;
+		$site_id = $this->getData('site_id');
+		$this->site = !empty($site_id) ? Site::find($site_id) : Site::defaultSite();
+		if (empty($this->site)) {
+			throw new Exception('No site is configured.');
+		}
+		$this->airport = $this->site['airport'];
+		$this->site_id = self::getSiteID($this->airport)->value;
 		date_default_timezone_set('Europe/Paris');
 	}
 
@@ -63,19 +63,6 @@ class Order
 			throw new Exception("order creation failed");
 		if ($order_id = $this->isExists($member_id))
 			return $order_id;
-//		if ($this->getData('parking_type') == ParkingType::VALET->value)
-//			$kind = 'valet';
-		$date = substr($this->getData('depart'), 0, 10);
-		$row = $this->conn->get_row(
-			$this->conn->prepare(
-				"SELECT `grille_tarifaire` FROM `tbl_remplissage` WHERE `date` = %s",
-				[$date]
-			), ARRAY_A);
-
-		$unserialize = unserialize($row['grille_tarifaire']);
-
-		$price_grid = $unserialize[$this->site_id];
-
 		$billing = implode(" ", array(ucwords($this->getData('nom')), ucwords($this->getData('prenom')))) . "\n";
 		$billing .=
 			implode(
@@ -90,17 +77,17 @@ class Order
 				)
 			);
 		$billing .= ',  ' . mb_strtoupper(self::PhoneCountry[$this->getData('pays')]['pays'], 'UTF-8');
-		$start = substr($this->getData('depart'), 0, 10);
-		$end = substr($this->getData('retour'), 0, 10);
-		if (Booked::is($start)) {
-			Logger::info("order.create", "car park is full on " . DatesRange::convertDate($start));
-			throw new Exception(__("Car park is full on ", 'parking-management') . DatesRange::convertDate($start));
+		$start_date = substr($this->getData('depart'), 0, 10);
+		$end_date = substr($this->getData('retour'), 0, 10);
+		if (Booked::is($start_date, $this->site)) {
+			Logger::info("order.create", "car park is full on " . DatesRange::convertDate($start_date));
+			throw new Exception(__("Car park is full on ", 'parking-management') . DatesRange::convertDate($start_date));
 		}
-		$start = DateTime::createFromFormat('Y-m-d', $start);
-		$end = DateTime::createFromFormat('Y-m-d', $end);
+		$start = DateTime::createFromFormat('Y-m-d', $start_date);
+		$end = DateTime::createFromFormat('Y-m-d', $end_date);
 		$start_hour = substr($this->getData('depart'), 11, 5);
 		$end_hour = substr($this->getData('retour'), 11, 5);
-		if (Booked::is($start) || Booked::is($end)) {
+		if (Booked::is($start_date, $this->site) || Booked::is($end_date, $this->site)) {
 			Logger::info("order.create", "car park is full");
 			return 0;
 		}
@@ -113,15 +100,14 @@ class Order
 		$referer = parse_url($_SERVER['HTTP_REFERER']);
 		$referer_host = array_key_exists('host', $referer) ? $referer['host'] : NULL;
 		$priceInstance = new Price($this->pm);
-		$priceInstance->setKind($this->kind);
 		$price = $priceInstance->getPrice($this->data);
 
 		$payment = new Payment($this->pm);
-		$payment->setKind($this->kind);
+		$payment->setSite($this->site);
 		$order = array(
 			'resauuid' => uniqid(),
 			'site_id' => $this->site_id,
-			'parking_id' => $this->site_id,
+			'parking_id' => $this->site['id'],
 			'date' => date('Y-m-d H:i:s'),
 			'membre_id' => $member_id,
 			'telephone' => $this->formatPhone($this->getData('tel_port')),
@@ -141,13 +127,12 @@ class Order
 			'terminal' => serialize($this->getData('terminal')),
 			'remarque' => '',
 			'total' => $price['total'],
-			'grille_tarifaire' => serialize($price_grid),
-			'tva' => 20,
-			'tva_transport' => 10,
+			'grille_tarifaire' => serialize($price),
+			'tva' => $this->site['tva'] ?? 20,
+			'tva_transport' => $this->site['tva_transport'] ?? 10,
 			'coupon_id' => 0,
 			'recherche' => sansAccent($search),
 			'status' => OrderStatus::CONFIRMED->value,
-//			'status' => (Payment::validateOnPayment($this->kind) || $this->getData('parking_type') == ParkingType::VALET->value) && $payment->isEnabled() ? OrderStatus::PENDING->value : OrderStatus::CONFIRMED->value,
 			'nb_retard' => 0,
 			'ip' => $_SERVER['REMOTE_ADDR'],
 			'host' => $_SERVER['HTTP_USER_AGENT'],
@@ -267,7 +252,6 @@ class Order
 			[
 				'annulation' => 1,
 				'status' => OrderStatus::CONFIRMED->value,
-//				'status' => OrderStatus::PENDING->value,
 			],
 			[
 				'id_commande' => $order_id

@@ -2,6 +2,7 @@
 
 namespace ParkingManagement\Admin;
 
+use Booking\Terminal;
 use ParkingManagement\Html;
 use ParkingManagement\Logger;
 use ParkingManagement\ParkingManagement;
@@ -107,50 +108,62 @@ class Pages
 		echo self::_shortcode_field(
 			'shortcode-form',
 			'shortcode-form',
-			esc_html__("Copy and paste this code into your page to include booking form.", 'parking-management'),
-			"[parking-management type='form' kind='booking']"
+			esc_html__("Copy and paste this code into your page to include the booking form. A site selector is shown automatically when more than one site is active.", 'parking-management'),
+			"[parking-management type='form']"
 		);
 		echo self::_shortcode_field(
-			'shortcode-form-valet',
-			'shortcode-form-valet',
-			esc_html__("Copy and paste this code into your page to include valet booking form.", 'parking-management'),
-			"[parking-management type='form' kind='valet']"
+			'shortcode-home-form',
+			'shortcode-home-form',
+			esc_html__("Copy and paste this code into your page to include the home (quick-quote) form.", 'parking-management'),
+			"[parking-management type='home-form']"
 		);
 		echo self::_shortcode_field(
-			'shortcode-home-form-booking',
-			'shortcode-home-form-booking',
-			esc_html__("Copy and paste this code into your page to include home booking form.", 'parking-management'),
-			"[parking-management type='home-form' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-home-form-valet',
-			'shortcode-home-form-valet',
-			esc_html__("Copy and paste this code into your page to include home valet form.", 'parking-management'),
-			"[parking-management type='home-form' kind='valet']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-price-booking',
-			'shortcode-price-booking',
-			esc_html__("Copy and paste this code into your page to include price booking table.", 'parking-management'),
-			"[parking-management type='price' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-price-valet',
-			'shortcode-price-valet',
-			esc_html__("Copy and paste this code into your page to include price valet table.", 'parking-management'),
-			"[parking-management type='price' kind='valet']"
+			'shortcode-price',
+			'shortcode-price',
+			esc_html__("Copy and paste this code into your page to include the price table.", 'parking-management'),
+			"[parking-management type='price']"
 		);
 		echo self::_shortcode_field(
 			'shortcode-booked',
 			'shortcode-booked',
-			esc_html__("Copy and paste this code into your page to include booked message.", 'parking-management'),
+			esc_html__("Copy and paste this code into your page to include the booked message.", 'parking-management'),
 			"[parking-management type='booked']"
 		);
 		echo self::_shortcode_field(
 			'shortcode-high-season',
 			'shortcode-high-season',
-			esc_html__("Copy and paste this code into your page to include high-season message.", 'parking-management'),
+			esc_html__("Copy and paste this code into your page to include the high-season message.", 'parking-management'),
 			"[parking-management type='high-season']"
+		);
+		echo self::_shortcode_field(
+			'shortcode-payment-payplug',
+			'shortcode-payment-payplug',
+			esc_html__("Copy and paste this code into your page to include the payplug payment form.", 'parking-management'),
+			"[parking-management type='payment' payment_provider='payplug']"
+		);
+		echo self::_shortcode_field(
+			'shortcode-payment-mypos',
+			'shortcode-payment-mypos',
+			esc_html__("Copy and paste this code into your page to include the mypos payment form.", 'parking-management'),
+			"[parking-management type='payment' payment_provider='mypos']"
+		);
+		echo self::_shortcode_field(
+			'shortcode-payment-stripe',
+			'shortcode-payment-stripe',
+			esc_html__("Copy and paste this code into your page to include the stripe payment form.", 'parking-management'),
+			"[parking-management type='payment' payment_provider='stripe']"
+		);
+		echo self::_shortcode_field(
+			'shortcode-notification-confirmation',
+			'shortcode-notification-confirmation',
+			esc_html__("Copy and paste this code into your page where you want a notification confirmation after an order.", 'parking-management'),
+			"[parking-management type='notification' action='confirmation']"
+		);
+		echo self::_shortcode_field(
+			'shortcode-notification-cancellation',
+			'shortcode-notification-cancellation',
+			esc_html__("Copy and paste this code into your page where you want a notification cancellation after an order.", 'parking-management'),
+			"[parking-management type='notification' action='cancellation']"
 		);
 		echo '<div class="save-pkmgmt">';
 		echo Html::_index("submit", "pkmgmt-save", "pkmgmt-save", array(
@@ -283,7 +296,6 @@ class Pages
 	{
 		return Html::_div(array('class' => $div_class),
 			Html::_label($id, $label_content),
-//			'<br/>',
 			Html::_div(array('class' => 'input-group mb-3'),
 				Html::_div(array('class' => 'input-group-prepend'),
 					'<button type="button" class="btn btn-outline-primary pages-list " data-bs-toggle="modal" data-bs-target="#dialog-pages-list">' . esc_html__('Browse page', 'parking-management') . '</button>'
@@ -337,20 +349,20 @@ class Pages
 		);
 	}
 
-	private static function _option_card(string $id, array $option): string
+	private static function _option_card(string $namePrefix, string $id, array $option): string
 	{
 
 		return '<div class="col-sm-3">'
 			. '<div class="card">'
 			. '<div class="card-body">'
 			. '<h5 class="card-title">' . $option['title'] . '</h5>'
-			. '<input type="hidden" value="' . $option['title'] . '" name="pkmgmt-form[options][' . $id . '][title]"/>'
-			. '<input type="hidden" value="' . $option['label'] . '" name="pkmgmt-form[options][' . $id . '][label]"/>'
+			. '<input type="hidden" value="' . $option['title'] . '" name="' . esc_attr("{$namePrefix}[{$id}][title]") . '"/>'
+			. '<input type="hidden" value="' . $option['label'] . '" name="' . esc_attr("{$namePrefix}[{$id}][label]") . '"/>'
 			. '<div class="input-group mb-3">'
 			. '<div class="input-group-text">'
-			. '<input type="hidden" value="0" name="pkmgmt-form[options][' . $id . '][enabled]"/>'
-			. '<input type="hidden" value="0" name="pkmgmt-form[options][' . $id . '][checked]"/>'
-			. Html::_index('checkbox', 'pkmgmt-form-options-' . $id . '-enabled', 'pkmgmt-form[options][' . $id . '][enabled]',
+			. '<input type="hidden" value="0" name="' . esc_attr("{$namePrefix}[{$id}][enabled]") . '"/>'
+			. '<input type="hidden" value="0" name="' . esc_attr("{$namePrefix}[{$id}][checked]") . '"/>'
+			. Html::_index('checkbox', 'pkmgmt-form-options-' . $id . '-enabled', "{$namePrefix}[{$id}][enabled]",
 				array(
 					'aria-label' => 'Enable the ' . $option['title'],
 					"value" => '1',
@@ -363,7 +375,7 @@ class Pages
 			)
 			. '</div>'
 			. '<div class="input-group-text">'
-			. Html::_index('checkbox', 'pkmgmt-form-options-' . $id . '-checked', 'pkmgmt-form[options][' . $id . '][checked]',
+			. Html::_index('checkbox', 'pkmgmt-form-options-' . $id . '-checked', "{$namePrefix}[{$id}][checked]",
 				array(
 					'aria-label' => 'the ' . $option['title'] . 'is checked in form',
 					"value" => '1',
@@ -376,14 +388,14 @@ class Pages
 			)
 			. '</div>'
 			. '<span class="input-group-text">€</span>'
-			. '<input type="number" class="form-control" name="pkmgmt-form[options][' . $id . '][price]" aria-label="Price for ' . $option['title'] . '" value="' . $option['price'] . '">'
+			. '<input type="number" class="form-control" name="' . esc_attr("{$namePrefix}[{$id}][price]") . '" aria-label="Price for ' . $option['title'] . '" value="' . $option['price'] . '">'
 			. '</div>'
 			. (isset($option['start'], $option['end']) ?
 				'<div class="input-group mb-3">'
 				. '<span class="input-group-text">Start</span>'
-				. '<input type="time" class="form-control" name="pkmgmt-form[options][' . $id . '][start]" value="' . $option['start'] . '">'
+				. '<input type="time" class="form-control" name="' . esc_attr("{$namePrefix}[{$id}][start]") . '" value="' . $option['start'] . '">'
 				. '<span class="input-group-text">End</span>'
-				. '<input type="time" class="form-control" name="pkmgmt-form[options][' . $id . '][end]" value="' . $option['end'] . '">'
+				. '<input type="time" class="form-control" name="' . esc_attr("{$namePrefix}[{$id}][end]") . '" value="' . $option['end'] . '">'
 				. '</div>'
 				: '')
 			. '</div>'
@@ -450,52 +462,26 @@ class Pages
 
 	public static function info_box($info, $box): void
 	{
+		echo '<p class="description">' . esc_html__('Company address/RCS/email live on each site now (a site can be a different legal company) - see the Info tab on each site below.', 'parking-management') . '</p>';
 		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('info-address', 'info_field', 'pkmgmt-info[address]', esc_html__('Address', 'parking-management'), $info['address']);
-		echo '</div>';
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('info-mobile', 'info_field', 'pkmgmt-info[mobile]', esc_html__('Mobile', 'parking-management'), $info['mobile']);
-		echo '</div>';
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('info-RCS', 'info_field', 'pkmgmt-info[RCS]', esc_html__('RCS', 'parking-management'), $info['RCS']);
-		echo '</div>';
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('info-email', 'info_field', 'pkmgmt-info[email]', esc_html__('Email', 'parking-management'), $info['email']);
-		echo '</div>';
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('info-terminal', 'info_field', 'pkmgmt-info[terminal]', esc_html__('Terminal', 'parking-management'), $info['terminal']);
-		echo '</div>';
-
-
-		echo '<div class="' . $box['id'] . '-fields">';
-
-		echo '<div class="row">';
-		echo '<div class="col">';
-		echo self::_field_checkbox('info-vehicle-type', 'info_field', 'pkmgmt-info[vehicle_type]', esc_html__('Vehicle Type supported', 'parking-management'), $info['vehicle_type']);
-		echo '</div>';
-		echo '<div class="col">';
-		echo self::_field_checkbox('info-type', 'info_field', 'pkmgmt-info[type]', esc_html__('Vehicle storage mode', 'parking-management'), $info['type']);
-		echo '</div>';
-		echo '</div>';
-
-		echo '<div class="row">';
-		echo '<div class="col">';
 		echo self::_field_checkbox('info-logs', 'info_field', 'pkmgmt-info[logs]', 'Logs', $info['logs']);
-		echo '</div>';
-		echo '</div>';
-
 		echo '</div>';
 	}
 
-	private static function database($database, $box, $name): void
+	public static function database_box($database, $box): void
+	{
+		self::database($database, $box, 'pkmgmt-database');
+	}
+
+	private static function database($database, $box, string $fieldPrefix): void
 	{
 		$contents = [];
 		$contents[] = '<div class="' . $box['id'] . '-fields">';
-		$contents[] = self::_field($name . '-database-name', 'database_field', 'pkmgmt-' . $name . '[database][name]', esc_html__('Name', 'parking-management'), $database['name']);
-		$contents[] = self::_field($name . '-database-host', 'database_field', 'pkmgmt-' . $name . '[database][host]', esc_html__('Host', 'parking-management'), $database['host']);
-		$contents[] = self::_field($name . '-database-port', 'database_field', 'pkmgmt-' . $name . '[database][port]', esc_html__('Port', 'parking-management'), $database['port']);
-		$contents[] = self::_field($name . '-database-user', 'database_field', 'pkmgmt-' . $name . '[database][user]', esc_html__('Username', 'parking-management'), $database['user']);
-		$contents[] = self::_field_password($name . '-database-password', 'database_field', 'pkmgmt-' . $name . '[database][password]', esc_html__('Password', 'parking-management'), $database['password']);
+		$contents[] = self::_field($fieldPrefix . '-name', 'database_field', "{$fieldPrefix}[name]", esc_html__('Name', 'parking-management'), $database['name'] ?? '');
+		$contents[] = self::_field($fieldPrefix . '-host', 'database_field', "{$fieldPrefix}[host]", esc_html__('Host', 'parking-management'), $database['host'] ?? '');
+		$contents[] = self::_field($fieldPrefix . '-port', 'database_field', "{$fieldPrefix}[port]", esc_html__('Port', 'parking-management'), $database['port'] ?? '');
+		$contents[] = self::_field($fieldPrefix . '-user', 'database_field', "{$fieldPrefix}[user]", esc_html__('Username', 'parking-management'), $database['user'] ?? '');
+		$contents[] = self::_field_password($fieldPrefix . '-password', 'database_field', "{$fieldPrefix}[password]", esc_html__('Password', 'parking-management'), $database['password'] ?? '');
 		$contents[] = '</div>';
 		echo self::_fieldset('Database', ...$contents);
 	}
@@ -535,7 +521,6 @@ class Pages
 					"$provider",
 					[
 						'class' => 'form-check-input',
-//						'data-bs-toggle' => "tab",
 						'data-bs-target' => "#nav-{$id}-{$provider}",
 						'data-bs-content' => "#nav-{$id}-tab-content",
 					],
@@ -575,30 +560,31 @@ class Pages
 
 	}
 
-	private static function mail($mail, $box, $name = 'mail'): void
+	private static function mail($mail, $box, string $fieldPrefix): void
 	{
+		$mail = wp_parse_args($mail, Template::mail_properties());
 		echo Html::_div(array('class' => $box['id'] . '-fields'),
-			Html::_index('hidden', $name . '-host-title', "pkmgmt-notification[${name}][host][title]", array('value' => $mail['host']['title'])),
-			Html::_index('hidden', $name . '-host-type', "pkmgmt-notification[${name}][host][type]", array('value' => $mail['host']['type'])),
-			self::_field($name . '-host', $name . '-field', "pkmgmt-notification[${name}][host][value]", $mail['host']['title'], $mail['host']['value'])
+			Html::_index('hidden', $fieldPrefix . '-host-title', "{$fieldPrefix}[host][title]", array('value' => $mail['host']['title'])),
+			Html::_index('hidden', $fieldPrefix . '-host-type', "{$fieldPrefix}[host][type]", array('value' => $mail['host']['type'])),
+			self::_field($fieldPrefix . '-host', 'mail-field', "{$fieldPrefix}[host][value]", $mail['host']['title'], $mail['host']['value'])
 		);
 		echo Html::_div(array('class' => $box['id'] . '-fields'),
-			Html::_index('hidden', $name . '-login-title', "pkmgmt-notification[${name}][login][title]", array('value' => $mail['login']['title'])),
-			Html::_index('hidden', $name . '-login-type', "pkmgmt-notification[${name}][login][type]", array('value' => $mail['login']['type'])),
-			self::_field($name . '-login', $name . '-field', "pkmgmt-notification[${name}][login][value]", $mail['login']['title'], $mail['login']['value'])
+			Html::_index('hidden', $fieldPrefix . '-login-title', "{$fieldPrefix}[login][title]", array('value' => $mail['login']['title'])),
+			Html::_index('hidden', $fieldPrefix . '-login-type', "{$fieldPrefix}[login][type]", array('value' => $mail['login']['type'])),
+			self::_field($fieldPrefix . '-login', 'mail-field', "{$fieldPrefix}[login][value]", $mail['login']['title'], $mail['login']['value'])
 		);
 		echo Html::_div(array('class' => $box['id'] . '-fields'),
-			Html::_index('hidden', $name . '-password-title', "pkmgmt-notification[${name}][password][title]", array('value' => $mail['password']['title'])),
-			Html::_index('hidden', $name . '-password-type', "pkmgmt-notification[${name}][password][type]", array('value' => $mail['password']['type'])),
-			self::_field_password($name . '-login', $name . '-field', "pkmgmt-notification[${name}][password][value]", $mail['password']['title'], $mail['password']['value']),
+			Html::_index('hidden', $fieldPrefix . '-password-title', "{$fieldPrefix}[password][title]", array('value' => $mail['password']['title'])),
+			Html::_index('hidden', $fieldPrefix . '-password-type', "{$fieldPrefix}[password][type]", array('value' => $mail['password']['type'])),
+			self::_field_password($fieldPrefix . '-password', 'mail-field', "{$fieldPrefix}[password][value]", $mail['password']['title'], $mail['password']['value']),
 		);
 		echo Html::_div(array('class' => $box['id'] . '-fields'),
-			Html::_index('hidden', $name . '-sender-title', "pkmgmt-notification[${name}][sender][title]", array('value' => $mail['sender']['title'])),
-			Html::_index('hidden', $name . '-sender-type', "pkmgmt-notification[${name}][sender][type]", array('value' => $mail['sender']['type'])),
-			Html::_div(array('class' => $name . '-field'),
-				Html::_label($name . '-sender', $mail['sender']['title']),
+			Html::_index('hidden', $fieldPrefix . '-sender-title', "{$fieldPrefix}[sender][title]", array('value' => $mail['sender']['title'])),
+			Html::_index('hidden', $fieldPrefix . '-sender-type', "{$fieldPrefix}[sender][type]", array('value' => $mail['sender']['type'])),
+			Html::_div(array('class' => 'mail-field'),
+				Html::_label($fieldPrefix . '-sender', $mail['sender']['title']),
 				'<br/>',
-				Html::_index("email", $name . '-sender', "pkmgmt-notification[${name}][sender][value]", array(
+				Html::_index("email", $fieldPrefix . '-sender', "{$fieldPrefix}[sender][value]", array(
 					'class' => 'wide',
 					'size' => 80,
 					'value' => $mail['sender']['value']
@@ -607,10 +593,11 @@ class Pages
 		);
 	}
 
-	private static function sms($sms, $box): void
+	private static function sms($sms, $box, string $fieldPrefix): void
 	{
+		$sms = wp_parse_args($sms, ['type' => 'AWS', 'user' => '', 'password' => '', 'sender' => '']);
 		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field_select('sms-type', 'sms_field', 'pkmgmt-notification[sms][type]', esc_html__('Type', 'parking-management'),
+		echo self::_field_select($fieldPrefix . '-type', 'sms_field', "{$fieldPrefix}[type]", esc_html__('Type', 'parking-management'),
 			array(
 				array(
 					'value' => 'AWS',
@@ -624,286 +611,302 @@ class Pages
 			$sms['type']);
 		echo '</div>';
 		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('sms-user', 'sms_field', 'pkmgmt-notification[sms][user]', esc_html__('Username', 'parking-management'), $sms['user']);
+		echo self::_field($fieldPrefix . '-user', 'sms_field', "{$fieldPrefix}[user]", esc_html__('Username', 'parking-management'), $sms['user']);
 		echo '</div>';
 		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field_password('sms-password', 'sms_field', 'pkmgmt-notification[sms][password]', esc_html__('Password', 'parking-management'), $sms['password']);
+		echo self::_field_password($fieldPrefix . '-password', 'sms_field', "{$fieldPrefix}[password]", esc_html__('Password', 'parking-management'), $sms['password']);
 		echo '</div>';
 		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('sms-sender', 'sms_field', 'pkmgmt-notification[sms][sender]', esc_html__('Sender', 'parking-management'), $sms['sender']);
+		echo self::_field($fieldPrefix . '-sender', 'sms_field', "{$fieldPrefix}[sender]", esc_html__('Sender', 'parking-management'), $sms['sender']);
 		echo '</div>';
 	}
 
-
-	public static function form_box($form, $box): void
+	private static function _date_range_row(string $fieldPrefix, $id, array $date): string
 	{
-		echo '<div class="col ' . $box['id'] . '-fields">';
-		echo Html::_index('hidden', 'form-booking-page-title', 'pkmgmt-form[booking_page][title]', array('value' => $form['booking_page']['title']));
-		echo self::_field_page('form-booking-page', "form-control", 'pkmgmt-form[booking_page][value]', $form['booking_page']['title'], $form['booking_page']['value']);
-		echo '</div>';
-		echo '<div class="col ' . $box['id'] . '-fields">';
-		echo Html::_index('hidden', 'form-valet-page-title', 'pkmgmt-form[valet_page][title]', array('value' => $form['valet_page']['title']));
-		echo self::_field_page('form-valet-page', "form-control", 'pkmgmt-form[valet_page][value]', $form['valet_page']['title'], $form['valet_page']['value']);
-		echo '</div>';
-
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo self::_field('form-indicative', 'form_field', 'pkmgmt-form[indicative]', esc_html__('Indicative', 'parking-management'), $form['indicative']);
-		echo '</div>';
-
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo '<div class="row">';
-		$form['options']['keep_keys']['label'] = 'I will keep my keys for %s €';
-		foreach ($form['options'] as $id => $option) {
-			echo self::_option_card($id, $option);
-		}
-		echo '</div>';
-		echo '</div>';
-
+		return '<div class="dates-element">'
+			. '<label for="' . esc_attr("{$fieldPrefix}-start-{$id}") . '">start</label>'
+			. '<input type="date" id="' . esc_attr("{$fieldPrefix}-start-{$id}") . '" name="' . esc_attr("{$fieldPrefix}[{$id}][start]") . '" class="start-date" value="' . esc_attr($date['start'] ?? '') . '">'
+			. '<label for="' . esc_attr("{$fieldPrefix}-end-{$id}") . '">end</label>'
+			. '<input type="date" id="' . esc_attr("{$fieldPrefix}-end-{$id}") . '" name="' . esc_attr("{$fieldPrefix}[{$id}][end]") . '" class="end-date" value="' . esc_attr($date['end'] ?? '') . '">'
+			. '<label for="' . esc_attr("{$fieldPrefix}-message-{$id}") . '">message</label>'
+			. '<input type="text" id="' . esc_attr("{$fieldPrefix}-message-{$id}") . '" name="' . esc_attr("{$fieldPrefix}[{$id}][message]") . '" class="message" placeholder="Message" value="' . esc_attr($date['message'] ?? '') . '">'
+			. '<i class="fas fa-trash delete"></i>'
+			. '</div>';
 	}
 
-	public static function booked_dates_box($booked_dates, $box): void
+	public static function sites_box($sites, $box): void
 	{
-		echo '<div ' . $box['id'] . 'class="dates-global">';
+		echo '<div id="' . esc_attr($box['id']) . '" class="sites-global">';
 		echo '<div class="dates-header">';
-		echo '<span>' . esc_html__('Add a date', 'parking-management') . '</span>';
-		echo '<button id="full-dates-add-element" type="button"><i class="fas fa-plus"></i></button>';
+		echo '<span>' . esc_html__('Add a site', 'parking-management') . '</span>';
+		echo '<button id="sites-add-element" type="button"><i class="fas fa-plus"></i></button>';
 		echo '</div>';
-		echo '<div id="booked_dates_body" class="dates-body">';
-		foreach ($booked_dates as $id => $date) {
-			echo '<div>';
-			echo '<div class="dates-element">';
-			echo '<label for="pkmgmt-booked-dates-start-' . $id . '">start</label>';
-			echo '<input type="date" id="pkmgmt-booked-dates-start-' . $id . '" name="pkmgmt-booked_dates[' . $id . '][start]" class="start-date" value="' . $date['start'] . '">';
-			echo '<label for="pkmgmt-booked-dates-end-' . $id . '">end</label>';
-			echo '<input type="date" id="pkmgmt-booked-dates-end-' . $id . '" name="pkmgmt-booked_dates[' . $id . '][end]" class="end-date" value="' . $date['end'] . '">';
-			echo '<label for="pkmgmt-booked-dates-message-' . $id . '">message</label>';
-			echo '<input type="text" id="pkmgmt-booked-dates-message-' . $id . '" name="pkmgmt-booked_dates[' . $id . '][message]" class="message" placeholder="Message" value="' . $date['message'] . '">';
-			echo '<i class="fas fa-trash delete"></i>';
-			echo '</div>';
-			echo '</div>';
-		}
-		echo '</div>';
-		echo '</div>';
-	}
-
-	public static function high_season_box($high_season, $box): void
-	{
-		echo '<div ' . $box['id'] . 'class="dates-global">';
-		echo '<div class="dates-header justify-content-between">';
-		echo '<div class="col-sm-1">';
-		echo '<div class="input-group">';
-		echo '<span class="input-group-text m-0">€</span>';
-		echo '<input type="number" class="form-control" name="pkmgmt-high_season[price]" aria-label="Price for High season" value="' . $high_season['price'] . '">';
-		echo '</div>';
-		echo '</div>';
-		echo '<div>';
-		echo '<span>' . esc_html__('Add a date', 'parking-management') . '</span>';
-		echo '<button id="high-season-add-element" type="button"><i class="fas fa-plus"></i></button>';
-		echo '</div>';
-		echo '</div>';
-		echo '<div id="high_season_dates_body" class="dates-body">';
-		if (array_key_exists('dates', $high_season)) {
-			foreach ($high_season['dates'] as $id => $date) {
-				echo '<div class="dates-element">';
-				echo '<label for="pkmgmt-high-season-dates-start-' . $id . '">start</label>';
-				echo '<input type="date" id="pkmgmt-high-season-dates-start-' . $id . '" name="pkmgmt-high_season[dates][' . $id . '][start]" class="start-date" value="' . $date['start'] . '">';
-				echo '<label for="pkmgmt-high-season-dates-end-' . $id . '">end</label>';
-				echo '<input type="date" id="pkmgmt-high-season-dates-end-' . $id . '" name="pkmgmt-high_season[dates][' . $id . '][end]" class="end-date" value="' . $date['end'] . '">';
-				echo '<label for="pkmgmt-high-season-dates-message-' . $id . '">message</label>';
-				echo '<input type="text" id="pkmgmt-high-season-dates-message-' . $id . '" name="pkmgmt-high_season[dates][' . $id . '][message]" class="message" placeholder="Message" value="' . $date['message'] . '">';
-				echo '<i class="fas fa-trash delete"></i>';
-				echo '</div>';
+		echo '<div id="sites_body" class="sites-body">';
+		if (is_array($sites)) {
+			foreach ($sites as $id => $site) {
+				if (!is_array($site))
+					continue;
+				echo self::_site_item($id, $site);
 			}
 		}
 		echo '</div>';
 		echo '</div>';
 	}
 
-	public static function notification_box($notification, $box): void
+	private static function _site_item($id, array $site): string
 	{
+		$name = "pkmgmt-sites[$id]";
+		$box = ['id' => "site-$id"];
 
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo '<nav>';
-		echo '<div class="nav nav-tabs" id="nav-notification-tab" role="tablist">';
+		$header = '<div class="d-flex justify-content-between align-items-start mb-2">'
+			. self::_field("site-$id-name", 'location_field flex-grow-1 me-3', "{$name}[name]", esc_html__('Name', 'parking-management'), $site['name'] ?? '')
+			. Html::_switch("site-$id-active", "{$name}[active]", [], esc_html__('Active', 'parking-management'), $site['active'] ?? '1')
+			. '<i class="fas fa-trash delete-site ms-3" title="' . esc_attr__('Remove', 'parking-management') . '"></i>'
+			. '</div>';
 
-		echo Html::_button(
-			array(
-				'class' => 'nav-link',
-				'id' => 'nav-notification-mail-tab',
+		$sections = [
+			'info' => ['label' => esc_html__('Info', 'parking-management'), 'content' => self::_site_info_tab($id, $name, $site)],
+			'tariffs' => ['label' => esc_html__('Price', 'parking-management'), 'content' => self::_site_tariffs_tab($name, $site)],
+			'form' => ['label' => esc_html__('Form options', 'parking-management'), 'content' => self::_site_form_tab($box, $name, $site)],
+			'booked' => ['label' => esc_html__('Booked dates', 'parking-management'), 'content' => self::_site_booked_dates_tab($name, $site)],
+			'high_season' => ['label' => esc_html__('High season', 'parking-management'), 'content' => self::_site_high_season_tab($name, $site)],
+			'notification' => ['label' => esc_html__('Notification', 'parking-management'), 'content' => self::_site_notification_tab($box, $name, $site)],
+			'payment' => ['label' => esc_html__('Payment', 'parking-management'), 'content' => self::_site_payment_tab($box, $name, $site)],
+			'templates' => ['label' => esc_html__('Templates', 'parking-management'), 'content' => self::_site_templates_tab($id, $name, $site)],
+		];
+
+		$navItems = [];
+		$panes = [];
+		$first = true;
+		foreach ($sections as $key => $section) {
+			$tabId = "site-{$id}-{$key}";
+			$navItems[] = Html::_button([
+				'class' => 'nav-link' . ($first ? ' active' : ''),
+				'id' => "nav-{$tabId}-tab",
 				'data-bs-toggle' => 'tab',
-				'data-bs-target' => '#nav-notification-mail',
+				'data-bs-target' => "#nav-{$tabId}",
 				'type' => 'button',
 				'role' => 'tab',
-				'aria-controls' => 'nav-notification-mail',
-			), 'Mail'
-		);
-		echo Html::_button(
-			array(
-				'class' => 'nav-link',
-				'id' => 'nav-notification-valet-tab',
-				'data-bs-toggle' => 'tab',
-				'data-bs-target' => '#nav-notification-valet',
-				'type' => 'button',
-				'role' => 'tab',
-				'aria-controls' => 'nav-notification-valet',
-			), 'Valet'
-		);
-		echo Html::_button(
-			array(
-				'class' => 'nav-link',
-				'id' => 'nav-notification-sms-tab',
-				'data-bs-toggle' => 'tab',
-				'data-bs-target' => '#nav-notification-sms',
-				'type' => 'button',
-				'role' => 'tab',
-				'aria-controls' => 'nav-notification-sms',
-			), 'SMS'
-		);
+				'aria-controls' => "nav-{$tabId}",
+			], $section['label']);
+			$panes[] = '<div class="tab-pane fade' . ($first ? ' show active' : '') . '" id="nav-' . $tabId . '" role="tabpanel">' . $section['content'] . '</div>';
+			$first = false;
+		}
 
-		echo '</div>';
-		echo '</nav>';
-
-		echo '<div class="tab-content" id="nav-notification-tab-content">';
-
-		echo '<div class="tab-pane fade" id="nav-notification-mail" role="tabpanel" aria-labelledby="nav-notification-mail-tab" tabindex="0">';
-		self::mail($notification['mail'], $box);
-		echo '</div>';
-
-		echo '<div class="tab-pane fade" id="nav-notification-valet" role="tabpanel" aria-labelledby="nav-notification-valet-tab" tabindex="0">';
-		self::mail($notification['valet'], $box, 'valet');
-		echo '</div>';
-
-		echo '<div class="tab-pane fade" id="nav-notification-sms" role="tabpanel" aria-labelledby="nav-notification-sms-tab" tabindex="0">';
-		self::sms($notification['sms'], $box);
-		echo '</div>';
-
-		echo '</div>';
-		echo '</div>';
+		return '<div class="site-item border rounded p-3 mb-3" data-site-id="' . esc_attr($id) . '">'
+			. $header
+			. '<nav><div class="nav nav-tabs" id="nav-site-' . $id . '-tab" role="tablist">' . implode('', $navItems) . '</div></nav>'
+			. '<div class="tab-content" id="nav-site-' . $id . '-tab-content">' . implode('', $panes) . '</div>'
+			. '</div>';
 	}
 
-	public static function booking_box($booking, $box): void
+	private static function _site_info_tab($id, string $name, array $site): string
 	{
-		echo self::_shortcode_field(
-			'shortcode-payment-payplug-booking',
-			'shortcode-payment-payplug-booking',
-			esc_html__("Copy and paste this code into your page to include payplug payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='payplug' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-payment-mypos-booking',
-			'shortcode-payment-mypos-booking',
-			esc_html__("Copy and paste this code into your page to include mypos payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='mypos' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-payment-stripe-booking',
-			'shortcode-payment-stripe-booking',
-			esc_html__("Copy and paste this code into your page to include stripe payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='stripe' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-notification-confirmation-booking',
-			'shortcode-notification-confirmation-booking',
-			esc_html__("Copy and paste this code into your page where you want a notification confirmation after an order.", 'parking-management'),
-			"[parking-management type='notification' action='confirmation' kind='booking']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-notification-cancellation-booking',
-			'shortcode-notification-cancellation-booking',
-			esc_html__("Copy and paste this code into your page where you want a notification cancellation after an order.", 'parking-management'),
-			"[parking-management type='notification' action='cancellation' kind='booking']"
-		);
-		echo self::_fieldset('Pages',
-			Html::_div(
-				[
-					'class' => 'col' . $box['id'] . '-fields',
-				],
-				Html::_index('hidden', 'booking-validation-page-title', 'pkmgmt-booking[validation_page][title]', array('value' => $booking['validation_page']['title'])),
-				self::_field_page('booking-validation-page', "", 'pkmgmt-booking[validation_page][value]', $booking['validation_page']['title'], $booking['validation_page']['value']),
-			)
-		);
+		$airportKey = $site['airport'] ?? 'orly';
+		$airport = Terminal::fromKey($airportKey);
+		$terminalOptions = Terminal::forAirport($airport);
+		$type = $site['type'] ?? [];
+		$vehicle_types = $site['vehicle_types'] ?? [];
 
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo '<div class="my-3">';
-		echo self::_field_checkbox('booking', 'form-control booking_field', 'pkmgmt-booking[options]', 'Options', $booking['options']);
-		echo '</div>';
-		echo '</div>';
+		$contents = [];
+		$contents[] = '<div class="row">';
+		$contents[] = '<div class="col-sm-4">';
+		$contents[] = self::_field_select("site-$id-airport", 'location_field airport-select', "{$name}[airport]", esc_html__('Airport', 'parking-management'), Terminal::airportOptions(), $airportKey);
+		$contents[] = '</div>';
+		$contents[] = '<div class="col-sm-4 terminal-container">';
+		$contents[] = self::_field_select("site-$id-terminal", 'location_field', "{$name}[terminal]", esc_html__('Terminal', 'parking-management'), $terminalOptions, $site['terminal'] ?? ($terminalOptions[0]['value'] ?? ''));
+		$contents[] = '</div>';
+		$contents[] = '<div class="col-sm-4">';
+		$contents[] = self::_field_checkbox("site-$id-vehicle-type", 'location_field', "{$name}[vehicle_types]", esc_html__('Vehicle types', 'parking-management'), [
+			'car' => $vehicle_types['car'] ?? '0',
+			'motorcycle' => $vehicle_types['motorcycle'] ?? '0',
+			'truck' => $vehicle_types['truck'] ?? '0',
+		]);
+		$contents[] = '</div>';
+		$contents[] = '</div>';
+		$contents[] = '<div class="row">';
+		$contents[] = '<div class="col-sm-4">';
+		$contents[] = self::_field_checkbox("site-$id-type", 'location_field', "{$name}[type]", esc_html__('Storage type (valet is an optional extra type)', 'parking-management'), [
+			'ext' => $type['ext'] ?? '0',
+			'int' => $type['int'] ?? '0',
+			'valet' => $type['valet'] ?? '0',
+		]);
+		$contents[] = '</div>';
+		$contents[] = '</div>';
 
-		self::database($booking['database'], $box, 'booking');
+		$info = $site['info'] ?? [];
+		$companyFields = [];
+		$companyFields[] = '<div class="row">';
+		$companyFields[] = '<div class="col-sm-6">';
+		$companyFields[] = self::_field("site-$id-address", 'location_field', "{$name}[info][address]", esc_html__('Address', 'parking-management'), $info['address'] ?? '');
+		$companyFields[] = '</div>';
+		$companyFields[] = '<div class="col-sm-3">';
+		$companyFields[] = self::_field("site-$id-mobile", 'location_field', "{$name}[info][mobile]", esc_html__('Mobile', 'parking-management'), $info['mobile'] ?? '');
+		$companyFields[] = '</div>';
+		$companyFields[] = '<div class="col-sm-3">';
+		$companyFields[] = self::_field("site-$id-email", 'location_field', "{$name}[info][email]", esc_html__('Email', 'parking-management'), $info['email'] ?? '');
+		$companyFields[] = '</div>';
+		$companyFields[] = '</div>';
+		$companyFields[] = '<div class="row">';
+		$companyFields[] = '<div class="col-sm-4">';
+		$companyFields[] = self::_field("site-$id-rcs", 'location_field', "{$name}[info][RCS]", esc_html__('RCS', 'parking-management'), $info['RCS'] ?? '');
+		$companyFields[] = '</div>';
+		$companyFields[] = '<div class="col-sm-4">';
+		$companyFields[] = self::_field("site-$id-tva", 'location_field', "{$name}[tva]", esc_html__('TVA (%)', 'parking-management'), $site['tva'] ?? 20);
+		$companyFields[] = '</div>';
+		$companyFields[] = '<div class="col-sm-4">';
+		$companyFields[] = self::_field("site-$id-tva-transport", 'location_field', "{$name}[tva_transport]", esc_html__('TVA transport (%)', 'parking-management'), $site['tva_transport'] ?? 10);
+		$companyFields[] = '</div>';
+		$companyFields[] = '</div>';
+		$contents[] = self::_fieldset(esc_html__('Company (this site\'s legal identity)', 'parking-management'), ...$companyFields);
 
-		self::payment($box['id'] . '-payment', $booking['payment'], 'pkmgmt-booking[payment]');
-
-		echo '<fieldset class="border border-dark p-3 position-relative my-4">';
-		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">Mail</legend>';
-		self::notification_template($box['id'] . '-mail', 'pkmgmt-booking[mail_templates]', $booking['mail_templates']);
-		echo '</fieldset>';
-		echo '<fieldset class="border border-dark p-3 position-relative my-4">';
-		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">SMS</legend>';
-		self::notification_template($box['id'] . '-sms', 'pkmgmt-booking[sms_template]', $booking['sms_template']);
-		echo '</fieldset>';
+		return implode(PHP_EOL, $contents);
 	}
 
-	public static function valet_box($valet, $box): void
+	private static function _site_tariffs_tab(string $name, array $site): string
 	{
-		echo self::_shortcode_field(
-			'shortcode-payment-payplug-valet',
-			'shortcode-payment-payplug-valet',
-			esc_html__("Copy and paste this code into your page to include payplug payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='payplug' kind='valet']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-payment-mypos-valet',
-			'shortcode-payment-mypos-valet',
-			esc_html__("Copy and paste this code into your page to include mypos payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='mypos' kind='valet']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-payment-stripe-valet',
-			'shortcode-payment-stripe-valet',
-			esc_html__("Copy and paste this code into your page to include stripe payment form.", 'parking-management'),
-			"[parking-management type='payment' payment_provider='stripe' kind='valet']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-notification-confirmation-valet',
-			'shortcode-notification-confirmation-valet',
-			esc_html__("Copy and paste this code into your page where you want a notification confirmation after an order.", 'parking-management'),
-			"[parking-management type='notification' action='confirmation' kind='valet']"
-		);
-		echo self::_shortcode_field(
-			'shortcode-notification-cancellation-valet',
-			'shortcode-notification-cancellation-valet',
-			esc_html__("Copy and paste this code into your page where you want a notification cancellation after an order.", 'parking-management'),
-			"[parking-management type='notification' action='cancellation' kind='valet']"
-		);
+		$tariffs = $site['tariffs'] ?? [];
+		$contents = [];
+		$contents[] = '<p class="description">' . esc_html__('This is the price grid served by this site\'s own GET /wp-json/pkmgmt/v1/prices response - the booking form calls that endpoint to compute the total shown to the customer. Valet is only ever offered for cars.', 'parking-management') . '</p>';
+		$contents[] = '<div class="price-grid-io mb-3">';
+		$contents[] = '<button type="button" class="button price-export">' . esc_html__('Export CSV', 'parking-management') . '</button> ';
+		$contents[] = '<button type="button" class="button price-import-trigger">' . esc_html__('Import CSV', 'parking-management') . '</button> ';
+		$contents[] = '<button type="button" class="button price-load-db">' . esc_html__('Load from DB', 'parking-management') . '</button>';
+		$contents[] = '<input type="file" accept=".csv,text/csv" class="price-import-file" style="display:none">';
+		$contents[] = '</div>';
+		foreach (['car', 'motorcycle', 'truck'] as $vehicle) {
+			$parkingKeys = $vehicle === 'car' ? ['ext', 'int', 'valet'] : ['ext', 'int'];
+			foreach ($parkingKeys as $parkingKey) {
+				$vehicleTariff = $tariffs[$vehicle][$parkingKey] ?? [];
+				$contents[] = '<div class="tariff-vehicle mb-2" data-vehicle="' . esc_attr($vehicle) . '" data-parking-type="' . esc_attr($parkingKey) . '">';
+				$contents[] = '<strong>' . esc_html(ucfirst($vehicle)) . ' - ' . esc_html(strtoupper($parkingKey)) . '</strong>';
+				$contents[] = '<div class="row g-2 align-items-end">';
+				for ($day = 1; $day <= 10; $day++) {
+					$contents[] = '<div class="col-auto">';
+					$contents[] = '<label class="form-label small mb-0">' . sprintf(esc_html__('%d day(s)', 'parking-management'), $day) . '</label>';
+					$contents[] = '<input type="number" step="0.01" class="form-control form-control-sm" data-day="' . esc_attr($day) . '" name="' . esc_attr("{$name}[tariffs][{$vehicle}][{$parkingKey}][{$day}]") . '" value="' . esc_attr($vehicleTariff[$day] ?? '') . '">';
+					$contents[] = '</div>';
+				}
+				$contents[] = '<div class="col-auto">';
+				$contents[] = '<label class="form-label small mb-0">' . esc_html__('Extra day', 'parking-management') . '</label>';
+				$contents[] = '<input type="number" step="0.01" class="form-control form-control-sm" data-day="jour_supplementaire" name="' . esc_attr("{$name}[tariffs][{$vehicle}][{$parkingKey}][jour_supplementaire]") . '" value="' . esc_attr($vehicleTariff['jour_supplementaire'] ?? '') . '">';
+				$contents[] = '</div>';
+				$contents[] = '</div>';
+				$contents[] = '</div>';
+			}
+		}
+		return implode(PHP_EOL, $contents);
+	}
 
-		echo self::_fieldset('Pages',
-			Html::_div(
-				[
-					'class' => 'col' . $box['id'] . '-fields',
-				],
-				Html::_index('hidden', 'valet-validation-page-title', 'pkmgmt-valet[validation_page][title]', array('value' => $valet['validation_page']['title'])),
-				self::_field_page('valet-validation-page', "", 'pkmgmt-valet[validation_page][value]', $valet['validation_page']['title'], $valet['validation_page']['value']),
-			)
-		);
+	private static function _site_form_tab(array $box, string $name, array $site): string
+	{
+		$form = $site['form'] ?? [];
+		$options = $form['options'] ?? Template::form_options();
+		if (isset($options['keep_keys'])) {
+			$options['keep_keys']['label'] = 'I will keep my keys for %s €';
+		}
 
-		echo '<div class="' . $box['id'] . '-fields">';
-		echo '<div class="my-3">';
-		echo self::_field_checkbox('valet', 'form-control valet_field', 'pkmgmt-valet[options]', 'Options', $valet['options']);
-		echo '</div>';
-		echo '</div>';
+		$contents = [];
+		$contents[] = '<div class="row">';
+		$contents[] = '<div class="col">';
+		$contents[] = Html::_index('hidden', $box['id'] . '-booking-page-title', "{$name}[form][booking_page][title]", ['value' => $form['booking_page']['title'] ?? 'Booking Page']);
+		$contents[] = self::_field_page($box['id'] . '-booking-page', 'form-control', "{$name}[form][booking_page][value]", esc_html__('Booking Page', 'parking-management'), $form['booking_page']['value'] ?? '');
+		$contents[] = '</div>';
+		$contents[] = '<div class="col">';
+		$contents[] = Html::_index('hidden', $box['id'] . '-validation-page-title', "{$name}[form][validation_page][title]", ['value' => $form['validation_page']['title'] ?? 'Validation Page']);
+		$contents[] = self::_field_page($box['id'] . '-validation-page', 'form-control', "{$name}[form][validation_page][value]", esc_html__('Validation Page', 'parking-management'), $form['validation_page']['value'] ?? '');
+		$contents[] = '</div>';
+		$contents[] = '</div>';
 
-		self::database($valet['database'], $box, 'valet');
+		$contents[] = self::_field($box['id'] . '-indicative', 'location_field', "{$name}[form][indicative]", esc_html__('Indicative', 'parking-management'), $form['indicative'] ?? '');
 
-		self::payment($box['id'] . '-payment', $valet['payment'], 'pkmgmt-valet[payment]');
+		$contents[] = self::_field_checkbox($box['id'] . '-form-toggles', 'location_field', "{$name}[form]", esc_html__('Options', 'parking-management'), [
+			'terms_and_conditions' => $form['terms_and_conditions'] ?? '0',
+			'dialog_confirmation' => $form['dialog_confirmation'] ?? '0',
+		]);
 
-		echo '<fieldset class="border border-dark p-3 position-relative my-4">';
-		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">Mail</legend>';
-		self::notification_template($box['id'] . '-mail', 'pkmgmt-valet[mail_templates]', $valet['mail_templates']);
+		$contents[] = '<div class="row mt-3">';
+		foreach ($options as $optId => $option) {
+			$contents[] = self::_option_card("{$name}[form][options]", $optId, $option);
+		}
+		$contents[] = '</div>';
+		return implode(PHP_EOL, $contents);
+	}
+
+	private static function _site_booked_dates_tab(string $name, array $site): string
+	{
+		$booked_dates = $site['booked_dates'] ?? [];
+		$fieldPrefix = "{$name}[booked_dates]";
+		$contents = [];
+		$contents[] = '<div class="dates-header">';
+		$contents[] = '<span>' . esc_html__('Add a date', 'parking-management') . '</span>';
+		$contents[] = '<button class="site-dates-add" type="button" data-field="' . esc_attr($fieldPrefix) . '"><i class="fas fa-plus"></i></button>';
+		$contents[] = '</div>';
+		$contents[] = '<div class="dates-body site-dates-body">';
+		foreach ($booked_dates as $dateId => $date) {
+			if (is_array($date)) {
+				$contents[] = self::_date_range_row($fieldPrefix, $dateId, $date);
+			}
+		}
+		$contents[] = '</div>';
+		return implode(PHP_EOL, $contents);
+	}
+
+	private static function _site_high_season_tab(string $name, array $site): string
+	{
+		$high_season = $site['high_season'] ?? ['price' => 0, 'dates' => []];
+		$fieldPrefix = "{$name}[high_season][dates]";
+		$contents = [];
+		$contents[] = '<div class="dates-header justify-content-between">';
+		$contents[] = '<div class="col-sm-2"><div class="input-group"><span class="input-group-text m-0">€</span>';
+		$contents[] = '<input type="number" class="form-control" name="' . esc_attr("{$name}[high_season][price]") . '" aria-label="Price for High season" value="' . esc_attr($high_season['price'] ?? 0) . '"></div></div>';
+		$contents[] = '<div>';
+		$contents[] = '<span>' . esc_html__('Add a date', 'parking-management') . '</span>';
+		$contents[] = '<button class="site-dates-add" type="button" data-field="' . esc_attr($fieldPrefix) . '"><i class="fas fa-plus"></i></button>';
+		$contents[] = '</div>';
+		$contents[] = '</div>';
+		$contents[] = '<div class="dates-body site-dates-body">';
+		foreach ($high_season['dates'] ?? [] as $dateId => $date) {
+			if (is_array($date)) {
+				$contents[] = self::_date_range_row($fieldPrefix, $dateId, $date);
+			}
+		}
+		$contents[] = '</div>';
+		return implode(PHP_EOL, $contents);
+	}
+
+	private static function _site_notification_tab(array $box, string $name, array $site): string
+	{
+		$notification = $site['notification'] ?? [];
+		ob_start();
+		self::mail($notification['mail'] ?? [], $box, "{$name}[notification][mail]");
+		$mailHtml = ob_get_clean();
+		ob_start();
+		self::sms($notification['sms'] ?? [], $box, "{$name}[notification][sms]");
+		$smsHtml = ob_get_clean();
+		return '<h5>' . esc_html__('Mail server', 'parking-management') . '</h5>' . $mailHtml
+			. '<h5 class="mt-3">' . esc_html__('SMS provider', 'parking-management') . '</h5>' . $smsHtml;
+	}
+
+	private static function _site_payment_tab(array $box, string $name, array $site): string
+	{
+		ob_start();
+		self::payment($box['id'] . '-payment', $site['payment'] ?? [], "{$name}[payment]");
+		return ob_get_clean();
+	}
+
+	private static function _site_templates_tab($id, string $name, array $site): string
+	{
+		ob_start();
+		echo '<fieldset class="border border-dark p-3 position-relative my-3">';
+		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">' . esc_html__('Mail', 'parking-management') . '</legend>';
+		self::notification_template("site-$id-mail", "{$name}[mail_templates]", $site['mail_templates'] ?? []);
 		echo '</fieldset>';
-		echo '<fieldset class="border border-dark p-3 position-relative my-4">';
-		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">SMS</legend>';
-		self::notification_template($box['id'] . '-sms', 'pkmgmt-valet[sms_template]', $valet['sms_template']);
+		echo '<fieldset class="border border-dark p-3 position-relative my-3">';
+		echo '<legend class="w-auto mx-2 bg-white position-absolute top-0 start-0 translate-middle-y fs-6">' . esc_html__('SMS', 'parking-management') . '</legend>';
+		self::notification_template("site-$id-sms", "{$name}[sms_template]", $site['sms_template'] ?? '');
 		echo '</fieldset>';
+		return ob_get_clean();
 	}
 
 	public static function dialog_page_list(): void
