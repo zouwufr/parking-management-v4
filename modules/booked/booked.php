@@ -37,7 +37,7 @@ class Booked implements IShortcode, IParkingManagement
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-booked', pkmgmt_plugin_url('modules/booked/css/style.css'));
+		wp_enqueue_style('parking-management-booked', pkmgmt_plugin_url('modules/booked/css/style.css'), array(), PKMGMT_VERSION);
 	}
 
 	/**

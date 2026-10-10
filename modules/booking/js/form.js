@@ -83,10 +83,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	// parking_type options shown = site's enabled types, minus valet unless the
 	// currently checked vehicle type is a car.
+	// The .radio wrapper carries Bootstrap's `d-flex` utility class (`display: flex
+	// !important`), which beats a plain inline `display:none` from jQuery's
+	// show()/hide()/toggle() - so hiding must go through this !important-scoped class
+	// (form.css: `form#reservation div.radio.pkmgmt-hidden`) instead.
+	function setRadioHidden($radioWrapper, hidden) {
+		$radioWrapper.toggleClass('pkmgmt-hidden', hidden);
+	}
+
 	function refreshParkingTypeOptions(site) {
 		const $parkingTypeRadios = $('input.parking-type');
 		if (!site) {
-			$parkingTypeRadios.closest('.radio').show();
+			setRadioHidden($parkingTypeRadios.closest('.radio'), false);
 			return;
 		}
 		const isCar = vehicleKeyByValue[$('input.type-id:checked').val()] === 'car';
@@ -96,15 +104,52 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (key === 'valet' && !isCar) {
 				supported = false;
 			}
-			$(this).closest('.radio').toggle(supported);
+			setRadioHidden($(this).closest('.radio'), !supported);
 			if (!supported && $(this).is(':checked')) {
 				$(this).prop('checked', false);
 			}
 		});
-		const $visibleParkingType = $parkingTypeRadios.filter(':visible');
+		// Note: the radio inputs themselves are always display:none by design (form.css
+		// hides them so only the pill-styled <label> shows) - jQuery's :visible filter on
+		// the <input> is therefore always false. Check the wrapping .radio div instead,
+		// which is what setRadioHidden() above actually shows/hides. :visible also
+		// correctly reflects the pkmgmt-hidden class since it's a real CSS display:none.
+		const $visibleParkingType = $parkingTypeRadios.filter(function () {
+			return $(this).closest('.radio').is(':visible');
+		});
 		if ($visibleParkingType.length && !$visibleParkingType.is(':checked')) {
 			$visibleParkingType.first().prop('checked', true);
 		}
+	}
+
+	// keep_keys/ev_charging/cancellation_insurance: opt-in extras configured per site
+	// (enabled/price/label), same alignment gap as the parking/vehicle type radios -
+	// the checkbox is always rendered (see Form::options()) and JS shows/hides/relabels
+	// it for whichever site is selected.
+	const optionKeys = ['keep_keys', 'ev_charging', 'cancellation_insurance'];
+
+	function refreshOptions(site) {
+		optionKeys.forEach(function (key) {
+			const $wrapper = $('[data-option="' + key + '"]');
+			if (!$wrapper.length) {
+				return;
+			}
+			if (!site) {
+				$wrapper.show();
+				return;
+			}
+			const option = (site.options && site.options[key]) || {};
+			const supported = option.enabled === '1' && !!option.price && option.price !== '0' && !!option.label;
+			$wrapper.toggle(supported);
+			const $checkbox = $wrapper.find('.options-checkbox');
+			if (!supported) {
+				if ($checkbox.is(':checked')) {
+					$checkbox.prop('checked', false);
+				}
+			} else {
+				$wrapper.find('label.form-check-label').text(option.label.replace('%s', option.price));
+			}
+		});
 	}
 
 	function applySite(siteId) {
@@ -113,25 +158,31 @@ document.addEventListener('DOMContentLoaded', function () {
 		const $typeIdRadios = $('input.type-id');
 
 		if (!site) {
-			$typeIdRadios.closest('.radio').show();
+			setRadioHidden($typeIdRadios.closest('.radio'), false);
 			refreshParkingTypeOptions(null);
+			refreshOptions(null);
 			return;
 		}
 
 		$typeIdRadios.each(function () {
 			const key = vehicleKeyByValue[$(this).val()];
 			const supported = !!(site.vehicle_types && site.vehicle_types[key] === '1');
-			$(this).closest('.radio').toggle(supported);
+			setRadioHidden($(this).closest('.radio'), !supported);
 			if (!supported && $(this).is(':checked')) {
 				$(this).prop('checked', false);
 			}
 		});
-		const $visibleTypeId = $typeIdRadios.filter(':visible');
+		// Same :visible caveat as refreshParkingTypeOptions() above - check the wrapping
+		// .radio div, not the permanently display:none <input>.
+		const $visibleTypeId = $typeIdRadios.filter(function () {
+			return $(this).closest('.radio').is(':visible');
+		});
 		if ($visibleTypeId.length && !$visibleTypeId.is(':checked')) {
 			$visibleTypeId.first().prop('checked', true);
 		}
 
 		refreshParkingTypeOptions(site);
+		refreshOptions(site);
 
 		const terminals = (external_object.terminals && external_object.terminals[site.airport]) || [];
 		$('#terminal_depart, #terminal_arrivee').each(function () {

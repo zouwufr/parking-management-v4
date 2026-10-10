@@ -10,7 +10,7 @@ class HomeForm
 
 	private function enqueue(ParkingManagement $pm): void
 	{
-		wp_enqueue_style('parking-management-home-form', pkmgmt_plugin_url('modules/booking/css/home_form.css'));
+		wp_enqueue_style('parking-management-home-form', pkmgmt_plugin_url('modules/booking/css/home_form.css'), array(), PKMGMT_VERSION);
 		wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css', array(), '6.0.0-beta3');
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array(), '5.3.3');
 		wp_enqueue_style('parking-management-easepick', 'https://cdn.jsdelivr.net/npm/@easepick/bundle@1.2.1/dist/index.css');

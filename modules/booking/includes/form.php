@@ -69,54 +69,57 @@ class Form
 		);
 	}
 
+	/**
+	 * Always renders all three - site restrictions are enforced client-side (JS
+	 * toggles visibility per the currently selected site), since switching sites
+	 * must be able to reveal options the page's initial/default site doesn't offer.
+	 * Previously this filtered by $this->site['type'] at render time, which meant a
+	 * site needing an option the default site didn't have (e.g. the default site has
+	 * no valet) could never show it - the radio simply didn't exist in the DOM to
+	 * toggle, so switching to that site left the selection stuck with nothing valid
+	 * to fall back to.
+	 */
 	private function get_parking_type(): array
 	{
-		$types = array();
-		$type = $this->site['type'] ?? [];
-		if (($type['ext'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '1',
-				'label' => esc_html__('Outside', 'parking-management'),
-				'value' => '0'
-			);
-		if (($type['int'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '2',
-				'label' => esc_html__('Inside', 'parking-management'),
-				'value' => '1'
-			);
-		if (($type['valet'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '3',
-				'label' => esc_html__('Valet', 'parking-management'),
-				'value' => '2'
-			);
-		return $types;
+		return array(
+			array('id' => '1', 'label' => esc_html__('Outside', 'parking-management'), 'value' => '0'),
+			array('id' => '2', 'label' => esc_html__('Inside', 'parking-management'), 'value' => '1'),
+			array('id' => '3', 'label' => esc_html__('Valet', 'parking-management'), 'value' => '2'),
+		);
 	}
 
+	/** Same reasoning as get_parking_type() above. */
 	private function get_vehicle_type(): array
 	{
-		$types = array();
+		return array(
+			array('id' => '1', 'label' => '<i class="fa fa-car fa-lg"></i>', 'value' => '1'),
+			array('id' => '2', 'label' => '<i class="fa fa-motorcycle fa-lg"></i>', 'value' => '2'),
+			array('id' => '3', 'label' => '<i class="fa fa-truck fa-lg"></i>', 'value' => '3'),
+		);
+	}
+
+	/** First parking_type value Site::current() actually enables, for the initial checked radio. */
+	private function defaultParkingTypeValue(): string
+	{
+		$type = $this->site['type'] ?? [];
+		foreach (array('ext' => '0', 'int' => '1', 'valet' => '2') as $key => $value) {
+			if (($type[$key] ?? '0') === '1') {
+				return $value;
+			}
+		}
+		return '0';
+	}
+
+	/** First vehicle type value Site::current() actually enables, for the initial checked radio. */
+	private function defaultVehicleTypeValue(): string
+	{
 		$vehicle_type = $this->site['vehicle_types'] ?? [];
-		if (($vehicle_type['car'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '1',
-				'label' => '<i class="fa fa-car fa-lg"></i>',
-				'value' => '1'
-			);
-		if (($vehicle_type['motorcycle'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '2',
-				'label' => '<i class="fa fa-motorcycle fa-lg"></i>',
-				'value' => '2'
-			);
-		if (($vehicle_type['truck'] ?? '0') === '1')
-			$types[] = array(
-				'id' => '3',
-				'label' => '<i class="fa fa-truck fa-lg"></i>',
-				'value' => '3'
-			);
-		return $types;
+		foreach (array('car' => '1', 'motorcycle' => '2', 'truck' => '3') as $key => $value) {
+			if (($vehicle_type[$key] ?? '0') === '1') {
+				return $value;
+			}
+		}
+		return '1';
 	}
 
 
@@ -144,7 +147,7 @@ class Form
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/booking/css/form.css'));
+		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/booking/css/form.css'), array(), PKMGMT_VERSION);
 		wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css', array(), '6.0.0-beta3');
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array(), '5.3.3');
 		wp_enqueue_style('parking-management-easepick', 'https://cdn.jsdelivr.net/npm/@easepick/bundle@1.2.1/dist/index.css');
@@ -180,6 +183,10 @@ class Form
 				'airport' => $site['airport'] ?? 'orly',
 				'terminal' => $site['terminal'] ?? '',
 				'vehicle_types' => $site['vehicle_types'] ?? [],
+				'options' => array_intersect_key(
+					$site['form']['options'] ?? [],
+					array_flip(array_merge(['keep_keys'], self::CHECKBOX_OPTION_KEYS))
+				),
 			);
 		}
 		$terminals = array();
@@ -282,8 +289,6 @@ class Form
 				),
 			),
 		];
-		if (count($vehicle_type) == 1)
-			$content[] = Html::_index('hidden', 'type_id', 'type_id', ['value' => $vehicle_type[0]['value']]);
 		$content[] = self::_row_field('type-id input-group align-items-center',
 			Html::_label_with_attr(
 				array('class' => 'type_id col-sm-3 form form-label'),
@@ -299,18 +304,23 @@ class Form
 					'type_id',
 					'type_id',
 					$vehicle_type,
-					($post['type_id'] ?? ($vehicle_type[0]['value'] ?? '')))
+					($post['type_id'] ?? $this->defaultVehicleTypeValue()))
 			)
 		);
+		// Always rendered (not gated on this site's enabled/price/label) so switching to a
+		// site with a different keep_keys config has an element to show/hide/relabel -
+		// same reasoning as get_parking_type()/get_vehicle_type() above.
 		$form = $this->site['form'] ?? [];
-		if (($form['options']['keep_keys']['enabled'] ?? '0') === '1' && $form['options']['keep_keys']['price'] !== '0' && !empty($form['options']['keep_keys']['label'])) {
-			$msg = sprintf(esc_html__($form['options']['keep_keys']['label'], 'parking-management'), $form['options']['keep_keys']['price']);
-			$content[] = Html::_switch(
+		$keep_keys = $form['options']['keep_keys'] ?? [];
+		$keep_keys_label = $keep_keys['label'] ?? esc_html__('I will keep my keys for %s €', 'parking-management');
+		$content[] = Html::_div(
+			array('class' => 'option-wrapper', 'data-option' => 'keep_keys'),
+			Html::_switch(
 				'keep_keys',
 				'keep_keys', [],
-				$msg,
-				array_key_exists('keep_keys', $post) ? $post['keep_keys']: $form['options']['keep_keys']['checked']);
-		}
+				sprintf(esc_html__($keep_keys_label, 'parking-management'), $keep_keys['price'] ?? 0),
+				array_key_exists('keep_keys', $post) ? $post['keep_keys'] : ($keep_keys['checked'] ?? '0'))
+		);
 		return array_merge($content,
 			[
 				Html::_p([
@@ -366,7 +376,7 @@ class Form
 					'parking_type',
 					'parking_type',
 					$parking_type,
-					($post['parking_type'] ?? ($parking_type[0]['value'] ?? '')))
+					($post['parking_type'] ?? $this->defaultParkingTypeValue()))
 			)
 		);
 		return Html::_div(
@@ -459,7 +469,7 @@ class Form
 		$post = array_merge($_GET, $_POST);
 		return [
 			self::_row_field('site_id',
-				self::_label('site_id', esc_html__('Parking site', 'parking-management')),
+				self::_label('site_id', esc_html__('Location', 'parking-management')),
 				Html::_select('site_id', 'site_id',
 					array(
 						'class' => 'site-select required border rounded py-2 px-3 form-select',
@@ -712,19 +722,25 @@ EOT;
 </div>';
 	}
 
+	// The other Template::form_options() keys (night_extra_charge, shuttle, late,
+	// holiday, forgetting, extra_baggage, oversize_baggage) apply automatically in
+	// Price::getPrice() based on date/time/pax, not an opt-in checkbox here.
+	private const CHECKBOX_OPTION_KEYS = ['ev_charging', 'cancellation_insurance'];
+
 	public function options(): string
 	{
+		// Always rendered (not gated on this site's enabled/price) so switching to a site
+		// with a different config has an element to show/hide/relabel client-side - same
+		// reasoning as get_parking_type()/get_vehicle_type() and keep_keys above.
 		$form = $this->site['form'] ?? [];
 
 		$post = array_merge($_GET, $_POST);
 		$contents = [];
-		foreach ($form['options'] ?? [] as $key => $value) {
-			if ($value['enabled'] !== '1' || $value['price'] === '0' || empty($value['label']) || $key == 'keep_keys') {
-				continue;
-			}
-			$msg = sprintf(esc_html__($value['label'], 'parking-management'), $value['price']);
+		foreach (self::CHECKBOX_OPTION_KEYS as $key) {
+			$value = $form['options'][$key] ?? [];
+			$msg = sprintf(esc_html__($value['label'] ?? '%s €', 'parking-management'), $value['price'] ?? 0);
 			$contents[] = Html::_div(
-				array('class' => 'options-container form-check'),
+				array('class' => 'options-container form-check', 'data-option' => $key),
 				Html::_index('hidden', '', $key, array('value' => '0')),
 				Html::_index(
 					'checkbox',
@@ -736,7 +752,7 @@ EOT;
 					],
 					false,
 					false,
-					(array_key_exists($key, $post) ? $post[$key] : $value['checked']) == '1'
+					(array_key_exists($key, $post) ? $post[$key] : ($value['checked'] ?? '0')) == '1'
 				),
 				Html::_label_with_attr(array('class' => 'form-check-label black'), $key, $msg)
 			);

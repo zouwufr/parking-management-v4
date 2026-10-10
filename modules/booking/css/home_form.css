@@ -1,3 +1,9 @@
+:root {
+	--pkmgmt-primary: #036faf;
+	--pkmgmt-primary-dark: #025683;
+	--pkmgmt-radius-sm: 10px;
+}
+
 /*
 ** high-season calendar
  */
@@ -11,19 +17,40 @@
 
 form#quote label.form-label {
 	color: #ffffff;
-	font-weight: 1000;
+	font-weight: 700;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
 }
 
 form#quote input.form-control {
-	height: 42px;
+	height: 46px;
+	border-radius: var(--pkmgmt-radius-sm);
 }
 
 form#quote .input-group-text {
 	background-color: #ffffff;
 	border-right: none;
+	border-top-left-radius: var(--pkmgmt-radius-sm);
+	border-bottom-left-radius: var(--pkmgmt-radius-sm);
 	color: #6c757d;
 }
 
 form#quote .input-group .form-control {
 	border-left: none;
+	border-top-right-radius: var(--pkmgmt-radius-sm);
+	border-bottom-right-radius: var(--pkmgmt-radius-sm);
+}
+
+form#quote .btn-success {
+	background-color: var(--pkmgmt-primary);
+	border-color: var(--pkmgmt-primary);
+	border-radius: var(--pkmgmt-radius-sm);
+	font-weight: 600;
+	transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
+}
+
+form#quote .btn-success:hover {
+	background-color: var(--pkmgmt-primary-dark);
+	border-color: var(--pkmgmt-primary-dark);
+	box-shadow: 0 6px 14px rgba(3, 111, 175, 0.3);
+	transform: translateY(-1px);
 }

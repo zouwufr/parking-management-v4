@@ -33,7 +33,7 @@ class HighSeason implements IShortcode, IParkingmanagement
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-high-season', pkmgmt_plugin_url('modules/high_season/css/style.css'));
+		wp_enqueue_style('parking-management-high-season', pkmgmt_plugin_url('modules/high_season/css/style.css'), array(), PKMGMT_VERSION);
 	}
 	private static function HTMLMessage(array $site, string $locale): string
 	{

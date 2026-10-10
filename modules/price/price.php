@@ -474,7 +474,9 @@ class Price implements IShortcode, IParkingmanagement
 
 	private function enqueue(): void
 	{
-		wp_enqueue_style('parking-management-booking', pkmgmt_plugin_url('modules/price/css/price.css'));
+		// Distinct handle from Form's 'parking-management-booking' - reusing it would make
+		// only one of the two stylesheets register if both shortcodes land on the same page.
+		wp_enqueue_style('parking-management-price', pkmgmt_plugin_url('modules/price/css/price.css'), array(), PKMGMT_VERSION);
 		wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', array(), '5.3.3');
 	}
 }
