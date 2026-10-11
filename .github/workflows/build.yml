@@ -1,70 +1,114 @@
-name: Build release
+name: Build & release
 
+# Merged PR into main -> semver from PR label (major/minor/patch) -> build -> release
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  version:
+    if: github.event.pull_request.merged == true && !contains(github.event.pull_request.labels.*.name, 'skip-release')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  create_release:
+      - name: Compute next version from PR label
+        id: next
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if   echo "$LABELS" | grep -q '"major"'; then BUMP=major
+          elif echo "$LABELS" | grep -q '"minor"'; then BUMP=minor
+          elif echo "$LABELS" | grep -q '"patch"'; then BUMP=patch
+          else echo "::error::PR has no major/minor/patch label"; exit 1; fi
+
+          LAST=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          LAST=${LAST:-v0.0.0}
+          IFS=. read -r MA MI PA <<< "${LAST#v}"
+          case $BUMP in
+            major) MA=$((MA+1)); MI=0; PA=0 ;;
+            minor) MI=$((MI+1)); PA=0 ;;
+            patch) PA=$((PA+1)) ;;
+          esac
+          VERSION="$MA.$MI.$PA"
+          echo "Last tag: $LAST, bump: $BUMP -> v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: none
+
+      - name: PHP syntax check
+        run: |
+          find . -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 \
+            | xargs -0 -n1 -P4 php -l -n > /dev/null
+
+      - name: Set version
+        run: |
+          sed -i "s/define('PKMGMT_VERSION', '[^']*');/define('PKMGMT_VERSION', '$VERSION');/" define.php
+          sed -i "s/ \* Version: .*/ \* Version: $VERSION/" wp-parking-management.php
+          grep -q "'$VERSION'" define.php
+          grep -q "Version: $VERSION" wp-parking-management.php
+
+      - name: Build ZIP
+        run: |
+          mkdir -p temp/$REPO_NAME
+          rsync -a --exclude-from='.distignore' --exclude=temp ./ temp/$REPO_NAME
+          (cd temp && zip -qr ../$REPO_NAME.zip .)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: ${{ env.REPO_NAME }}.zip
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-    runs-on: ubuntu-latest
-
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      REPO_NAME: ${{ github.event.repository.name }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-zip
 
-      - name: Install zip
-        run: sudo apt-get install zip -y
-
-      - name: Extract repository name
-        id: build_env
-        run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          CLEAN_TAG_NAME=${TAG_NAME#v}
-          echo "TAG_NAME=$CLEAN_TAG_NAME" >> $GITHUB_ENV
-          echo "REPO_NAME=$(basename $GITHUB_REPOSITORY)" >> $GITHUB_ENV
-
-      - name: Update version in define.php
-        run: |
-          sed -i "s/define('PKMGMT_VERSION', '[^']*');/define('PKMGMT_VERSION', '${{ env.TAG_NAME }}');/" define.php
-
-      - name: Update version in wp-parking-management.php
-        run: |
-          sed -i "s/ \* Version: .*/ \* Version: ${{ env.TAG_NAME }}/" wp-parking-management.php
-
-      - name: Create temporary directory
-        run: mkdir -p temp/${{ env.REPO_NAME }}
-
-      - name: Copy files to temporary directory
-        run: rsync -av --exclude-from='.distignore' ./ temp/${{ env.REPO_NAME }}
-
-      - name: Create ZIP Archive
-        run: |
-          cd temp/
-          zip -r ../${{ env.REPO_NAME }}.zip .
-
-      - name: Create Release
-        id: create_release
+      - name: Create release (tag + notes)
         uses: release-drafter/release-drafter@v6
         with:
           config-name: release-drafter.yml
+          version: ${{ env.VERSION }}
+          tag: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          commitish: ${{ github.event.pull_request.merge_commit_sha }}
           publish: true
-          tag: ${{ github.ref_name }}
-          name: 'Release ${{ github.ref_name }}'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+      - name: Upload ZIP to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ env.REPO_NAME }}.zip
-          asset_name: ${{ env.REPO_NAME }}.zip
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v$VERSION" "$REPO_NAME.zip" --repo "$GITHUB_REPOSITORY" --clobber
