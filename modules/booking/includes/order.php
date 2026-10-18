@@ -50,7 +50,7 @@ class Order
 			throw new Exception('No site is configured.');
 		}
 		$this->airport = $this->site['airport'];
-		$this->site_id = self::getSiteID($this->airport)->value;
+		$this->site_id = self::resolveLegacySiteID($this->site)->value;
 		date_default_timezone_set('Europe/Paris');
 	}
 
@@ -107,7 +107,12 @@ class Order
 		$order = array(
 			'resauuid' => uniqid(),
 			'site_id' => $this->site_id,
-			'parking_id' => $this->site['id'],
+			// Must match site_id: in the legacy grid these are the same identity
+			// (Airport::value, see resolveLegacySiteID() below) - $this->site['id']
+			// (this plugin's own site config key) is a different value space and
+			// does not belong here. Site::findByLegacySiteId() is how notification/
+			// payment flows recover the plugin site from this column afterwards.
+			'parking_id' => $this->site_id,
 			'date' => date('Y-m-d H:i:s'),
 			'membre_id' => $member_id,
 			'telephone' => $this->formatPhone($this->getData('tel_port')),
@@ -358,6 +363,29 @@ class Order
 			"orly3" => Airport::ORLY3,
 			default => Airport::ORLY,
 		};
+	}
+
+	/**
+	 * Resolves which legacy parking identity (tbl_remplissage/tbl_commande's parking_id,
+	 * Airport::value here) this site's data actually lives under - used anywhere the legacy
+	 * database is queried or written on this site's behalf (lot availability, Load-from-DB,
+	 * the site_id recorded on a real booking). Not the same question as "which airport" -
+	 * a site's `airport` field only ever holds 'orly'/'roissy' (see Terminal::airportOptions(),
+	 * which deliberately excludes ORLY2/ORLY3), since multiple distinct legal parking
+	 * businesses can share one physical airport (e.g. Orly also hosts "CoverPark").
+	 * Falls back to the airport-based default for sites saved before this field existed.
+	 */
+	public static function resolveLegacySiteID(array $site): Airport
+	{
+		$explicit = $site['legacy_site_id'] ?? '';
+		if ($explicit !== '' && is_numeric($explicit)) {
+			try {
+				return Airport::fromInt((int)$explicit);
+			} catch (InvalidArgumentException) {
+				// unknown id - fall through to the airport-based default below
+			}
+		}
+		return self::getSiteID($site['airport'] ?? 'orly');
 	}
 
 	public static function getIATAbyAirport(Airport $airport): IATA

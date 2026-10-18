@@ -31,7 +31,7 @@ class Notification implements IShortcode
 		try {
 			$order = new Order();
 			$row = $order->read((int)$_GET['order_id']);
-			$site = Site::find($row['parking_id']) ?? Site::defaultSite();
+			$site = Site::findByLegacySiteId($row['parking_id']) ?? Site::defaultSite();
 			if ($site === null) {
 				Logger::error("notification.shortcode", "no site could be resolved for this order");
 				return '';

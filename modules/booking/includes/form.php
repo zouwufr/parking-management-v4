@@ -27,7 +27,7 @@ class Form
 				array(
 					'class' => 'radio ' . $div_class,
 				),
-				Html::_radio($id . '_' . $element['id'], $name, $element['value'], array('class' => 'parking-type', 'tabindex' => "9"), $value == $element['value']),
+				Html::_radio($id . '_' . $element['id'], $name, $element['value'], array('class' => 'parking-type'), $value == $element['value']),
 				Html::_label_with_attr(
 					array(
 						'class' => 'px-md-5 px-3 label form-label',
@@ -47,7 +47,7 @@ class Form
 				array(
 					'class' => 'radio ' . $div_class,
 				),
-				Html::_radio($id . '_' . $element['value'], $name, $element['value'], array('class' => 'type-id', 'tabindex' => "6",), $value == $element['value']),
+				Html::_radio($id . '_' . $element['value'], $name, $element['value'], array('class' => 'type-id'), $value == $element['value']),
 				Html::_label_with_attr(array(
 					'class' => 'label px-3 px-md-5'
 				), $id . '_' . $element['value'],
@@ -183,6 +183,8 @@ class Form
 				'airport' => $site['airport'] ?? 'orly',
 				'terminal' => $site['terminal'] ?? '',
 				'vehicle_types' => $site['vehicle_types'] ?? [],
+				'terms_and_conditions' => $site['form']['terms_and_conditions'] ?? '0',
+				'dialog_confirmation' => $site['form']['dialog_confirmation'] ?? '0',
 				'options' => array_intersect_key(
 					$site['form']['options'] ?? [],
 					array_flip(array_merge(['keep_keys'], self::CHECKBOX_OPTION_KEYS))
@@ -201,7 +203,6 @@ class Form
 				'site_id' => $this->site['id'] ?? '',
 				'form_css' => pkmgmt_plugin_url('modules/booking/css/form.css'),
 				'indicative' => $this->site['form']['indicative'] ?? '',
-				'form_options' => $this->site['form']['options'] ?? [],
 				'sites' => $sites,
 				'terminals' => $terminals,
 			)
@@ -209,19 +210,18 @@ class Form
 
 	}
 
-	public function common_personal_information(ParkingManagement $pm): array
+	/** Identity fields - Step 3 ("Your Details"). */
+	private function identity_fields(): array
 	{
 		$post = array_merge($_GET, $_POST);
-		$vehicle_type = $this->get_vehicle_type();
 
-		$content = [
+		return [
 			self::_row_field('name',
 				self::_label('nom', esc_html__('Name', 'parking-management')),
 				Html::_index('text', 'nom', 'nom',
 					array(
 						'class' => 'name regular required col-5 border rounded py-2 px-3 form-control',
 						'value' => $post['nom'] ?? '',
-						'tabindex' => "1",
 						'autofocus' => 'autofocus',
 					)
 				),
@@ -232,7 +232,6 @@ class Form
 					array(
 						'class' => 'firstname regular required col-5 border rounded py-2 px-3 form-control',
 						'value' => $post['prenom'] ?? '',
-						'tabindex' => "2",
 					)
 				),
 			),
@@ -243,7 +242,6 @@ class Form
 						'class' => 'zip-code regular col-5 border rounded py-2 px-3 form-control',
 						'autocomplete' => 'off',
 						'value' => $post['code_postal'] ?? '',
-						'tabindex' => "3",
 					)
 				),
 				Html::_index('text', 'ville', 'ville',
@@ -274,7 +272,6 @@ class Form
 					array(
 						'class' => 'mobile regular required col-5 border rounded py-2 form-control',
 						'value' => $post['tel_port'] ?? '',
-						'tabindex' => "4",
 					)
 				),
 			),
@@ -284,12 +281,19 @@ class Form
 					array(
 						'class' => 'email regular required col-5 border rounded py-2 px-3 form-control',
 						'value' => $post['email'] ?? '',
-						'tabindex' => "5",
 					)
 				),
 			),
 		];
-		$content[] = self::_row_field('type-id input-group align-items-center',
+	}
+
+	/** Vehicle-type radios - Step 2 ("Vehicle & Parking"). */
+	private function vehicle_type_field(): string
+	{
+		$post = array_merge($_GET, $_POST);
+		$vehicle_type = $this->get_vehicle_type();
+
+		return self::_row_field('type-id input-group align-items-center',
 			Html::_label_with_attr(
 				array('class' => 'type_id col-sm-3 form form-label'),
 				'type_id',
@@ -307,13 +311,21 @@ class Form
 					($post['type_id'] ?? $this->defaultVehicleTypeValue()))
 			)
 		);
-		// Always rendered (not gated on this site's enabled/price/label) so switching to a
-		// site with a different keep_keys config has an element to show/hide/relabel -
-		// same reasoning as get_parking_type()/get_vehicle_type() above.
+	}
+
+	/**
+	 * Always rendered (not gated on this site's enabled/price/label) so switching to a
+	 * site with a different keep_keys config has an element to show/hide/relabel - same
+	 * reasoning as get_parking_type()/get_vehicle_type() above. Step 2 ("Vehicle & Parking").
+	 */
+	private function keep_keys_field(): string
+	{
+		$post = array_merge($_GET, $_POST);
 		$form = $this->site['form'] ?? [];
 		$keep_keys = $form['options']['keep_keys'] ?? [];
 		$keep_keys_label = $keep_keys['label'] ?? esc_html__('I will keep my keys for %s €', 'parking-management');
-		$content[] = Html::_div(
+
+		return Html::_div(
 			array('class' => 'option-wrapper', 'data-option' => 'keep_keys'),
 			Html::_switch(
 				'keep_keys',
@@ -321,47 +333,52 @@ class Form
 				sprintf(esc_html__($keep_keys_label, 'parking-management'), $keep_keys['price'] ?? 0),
 				array_key_exists('keep_keys', $post) ? $post['keep_keys'] : ($keep_keys['checked'] ?? '0'))
 		);
-		return array_merge($content,
-			[
-				Html::_p([
-					'class' => 'h5 black',
-				], esc_html__('We only accommodate passenger vehicles such as compact cars, sedans, SUVs, and 4x4s.', 'parking-management')),
-				self::_row_field('modele',
-					self::_label('modele', esc_html__('Car model', 'parking-management')),
-					Html::_index('text', 'marque', 'marque',
-						array(
-							'class' => 'marque regular',
-							'value' => $post['marque'] ?? '',
-							'tabindex' => "-1",
-						)
-					),
-					Html::_index('text', 'modele', 'modele',
-						array(
-							'class' => 'modele regular required col-5 border rounded py-2 px-3 form-control',
-							'value' => $post['modele'] ?? '',
-							'tabindex' => "7",
-						)
-					)
-				),
-				self::_row_field('immatriculation',
-					self::_label('immatriculation', esc_html__('Immatriculation', 'parking-management')),
-					Html::_index('text', 'immatriculation', 'immatriculation',
-						array(
-							'class' => 'immatriculation regular required col-5 border rounded py-2 px-3 form-control',
-							'value' => $post['immatriculation'] ?? '',
-							'tabindex' => "8",
-						)
-					)
-				)
-			]);
 	}
 
-	public function personal_information(): string
+	/** Car model/plate fields - Step 2 ("Vehicle & Parking"). */
+	private function car_details_fields(): array
+	{
+		$post = array_merge($_GET, $_POST);
+
+		return [
+			Html::_p([
+				'class' => 'h5 black',
+			], esc_html__('We only accommodate passenger vehicles such as compact cars, sedans, SUVs, and 4x4s.', 'parking-management')),
+			self::_row_field('modele',
+				self::_label('modele', esc_html__('Car model', 'parking-management')),
+				Html::_index('text', 'marque', 'marque',
+					array(
+						'class' => 'marque regular',
+						'value' => $post['marque'] ?? '',
+						'tabindex' => "-1",
+					)
+				),
+				Html::_index('text', 'modele', 'modele',
+					array(
+						'class' => 'modele regular required col-5 border rounded py-2 px-3 form-control',
+						'value' => $post['modele'] ?? '',
+					)
+				)
+			),
+			self::_row_field('immatriculation',
+				self::_label('immatriculation', esc_html__('Immatriculation', 'parking-management')),
+				Html::_index('text', 'immatriculation', 'immatriculation',
+					array(
+						'class' => 'immatriculation regular required col-5 border rounded py-2 px-3 form-control',
+						'value' => $post['immatriculation'] ?? '',
+					)
+				)
+			),
+		];
+	}
+
+	/** Car-park (ext/int/valet) radios - Step 2 ("Vehicle & Parking"). */
+	private function parking_type_field(): string
 	{
 		$post = array_merge($_GET, $_POST);
 		$parking_type = $this->get_parking_type();
-		$content = $this->common_personal_information($this->pm);
-		$content[] = self::_row_field('parking_type input-group align-items-center',
+
+		return self::_row_field('parking_type input-group align-items-center',
 			Html::_label_with_attr(
 				array('class' => 'parking_type col-sm-3 form form-label'),
 				'parking_type',
@@ -379,12 +396,78 @@ class Form
 					($post['parking_type'] ?? $this->defaultParkingTypeValue()))
 			)
 		);
+	}
+
+	/** Wraps a step's fields in the shared step fieldset shell + Prev/Next nav. */
+	private function step_fieldset(int $n, string $title, ...$fields): string
+	{
+		$fields[] = $this->step_nav_buttons($n);
+		return Html::_fieldset_with_attr(
+			array(
+				'class' => 'pkmgmt-step' . ($n > 1 ? ' pkmgmt-step-hidden' : ''),
+				'id' => 'pkmgmt-step-' . $n,
+				'data-step' => (string)$n,
+				'aria-hidden' => $n > 1 ? 'true' : 'false',
+			),
+			'<legend id="pkmgmt-step-' . $n . '-heading" tabindex="-1">' . $title . '</legend>',
+			...$fields,
+		);
+	}
+
+	private function step_nav_buttons(int $n): string
+	{
 		return Html::_div(
-			array('class' => 'personal-information col-12'),
-			Html::_fieldset(
-				'<legend>' . __('Personal Information', 'parking-management') . '</legend>',
-				...$content,
-			)
+			array('class' => 'pkmgmt-step-actions'),
+			$n > 1 ? '<button type="button" class="btn btn-outline-secondary pkmgmt-step-prev" data-step-prev>' . esc_html__('Back', 'parking-management') . '</button>' : '',
+			// Never blocked on per-step field completeness - the final "Pay and validate"
+			// submit is what actually enforces required fields (see the invalidHandler on
+			// $("#reservation").validate({...}) in form.js), jumping back to whichever step
+			// holds the first invalid field if any are missing.
+			$n < 3 ? '<button type="button" class="btn btn-primary pkmgmt-step-next" data-step-next>' . esc_html__('Next', 'parking-management') . ' <i class="fa-regular fa-circle-right"></i></button>' : '',
+		);
+	}
+
+	/** Step progress indicator + screen-reader announcer, rendered once before the steps. */
+	public function progress_indicator(int $total = 3): string
+	{
+		$labels = [
+			1 => esc_html__('Location & Dates', 'parking-management'),
+			2 => esc_html__('Vehicle & Parking', 'parking-management'),
+			3 => esc_html__('Your Details', 'parking-management'),
+		];
+		$items = [];
+		for ($n = 1; $n <= $total; $n++) {
+			$items[] = Html::_li(
+				array(
+					'class' => 'pkmgmt-progress-step',
+					'data-step' => (string)$n,
+					'aria-current' => $n === 1 ? 'step' : 'false',
+				),
+				'<span class="pkmgmt-progress-number">' . $n . '</span>',
+				'<span class="pkmgmt-progress-label">' . ($labels[$n] ?? '') . '</span>'
+			);
+		}
+		return Html::_nav(
+			array('class' => 'pkmgmt-progress', 'aria-label' => esc_html__('Booking steps', 'parking-management')),
+			Html::_ul(array(), ...$items),
+			Html::_span(array('class' => 'visually-hidden', 'aria-live' => 'polite', 'id' => 'pkmgmt-step-announcer'), '')
+		);
+	}
+
+	public function step_vehicle_and_parking(): string
+	{
+		$content = array_merge(
+			[$this->vehicle_type_field(), $this->parking_type_field()],
+			$this->car_details_fields(),
+			[$this->keep_keys_field(), $this->options()],
+		);
+		return $this->step_fieldset(2, esc_html__('Vehicle & Parking', 'parking-management'), ...$content);
+	}
+
+	public function step_your_details(): string
+	{
+		return $this->step_fieldset(3, esc_html__('Your Details', 'parking-management'),
+			...$this->identity_fields(),
 		);
 	}
 
@@ -395,7 +478,6 @@ class Form
 			self::_label('nb_pax', esc_html__('Number of pax', 'parking-management')),
 			Html::_select('nb_pax', 'nb_pax', array(
 				'class' => 'required border col-5 rounded py-2 px-3 form-select',
-				'tabindex' => "14",
 			),
 				array(
 					array(
@@ -473,7 +555,6 @@ class Form
 				Html::_select('site_id', 'site_id',
 					array(
 						'class' => 'site-select required border rounded py-2 px-3 form-select',
-						'tabindex' => "9",
 					),
 					$sites,
 					$post['site_id'] ?? $sites[0]['value']
@@ -482,7 +563,7 @@ class Form
 		];
 	}
 
-	private function common_trip(ParkingManagement $pm): array
+	private function common_trip(): array
 	{
 		$post = array_merge($_GET, $_POST);
 		return [
@@ -493,7 +574,6 @@ class Form
 					array(
 						'class' => 'destination regular border rounded py-2 form-control',
 						'value' => $post['destination'] ?? '',
-						'tabindex' => "10",
 					)
 				),
 				Html::_index('text', 'destination_id', 'destination_id',
@@ -536,7 +616,6 @@ class Form
 							Html::_select('terminal_depart', 'terminal[depart]',
 								array(
 									'class' => 'border form-select py-2',
-									'tabindex' => "11",
 								),
 								$this->get_terminal(),
 								(array_key_exists('terminal', $post) && $post['terminal']['depart'] ?? '')),
@@ -552,7 +631,6 @@ class Form
 							Html::_select('terminal_arrivee', 'terminal[arrivee]',
 								array(
 									'class' => 'border form-select py-2',
-									'tabindex' => "13",
 								),
 								$this->get_terminal(),
 								(array_key_exists('terminal', $post) && $post['terminal']['arrivee'] ?? '')),
@@ -576,7 +654,6 @@ class Form
 									Html::_index('text', 'depart', 'depart', array(
 										'class' => 'departure regular required form-control border py-2',
 										'autocomplete' => 'off',
-										'tabindex' => "12",
 										'value' => $post['depart'] ?? '',
 									)),
 									Html::_span(
@@ -599,25 +676,29 @@ class Form
 		];
 	}
 
-	public function trip_information(): string
+	public function step_location_and_dates(): string
 	{
-		$content = $this->common_trip($this->pm);
+		$content = $this->common_trip();
 		$content[] = $this->pax();
-		return Html::_div(
-			array('class' => 'trip_information'),
-			Html::_fieldset(
-				'<legend>' . __('Trip Information', 'parking-management') . '</legend>',
-
-				...$content,
-			),
+		return $this->step_fieldset(1, esc_html__('Location & Dates', 'parking-management'),
+			...$content,
 		);
 	}
 
+	/**
+	 * Always rendered (like options()'s opt-in checkboxes) regardless of whether the
+	 * *default* site requires it - terms_and_conditions is a per-site flag, and the
+	 * visitor can switch sites client-side via the Step 1 selector. Rendering it only
+	 * for whichever site happened to be current at page-load time meant enabling it on
+	 * a non-default site had no visible effect: the checkbox simply didn't exist in the
+	 * DOM for form.js's refreshTermsAndConditions() (called from applySite()) to show.
+	 * The `required` class/checked-state below still reflect the current site so the
+	 * first paint (and no-JS fallback) is already correct.
+	 */
 	public function cgv(): string
 	{
 		$form = $this->site['form'] ?? [];
-		if (($form['terms_and_conditions'] ?? '0') !== '1')
-			return '';
+		$required = ($form['terms_and_conditions'] ?? '0') === '1';
 		$post = array_merge($_GET, $_POST);
 		$warning_msg = "Merci de valider les conditions générales de vente";
 		$msg = <<<EOT
@@ -625,21 +706,20 @@ En cochant cette case (obligatoire), j'accèpte les <a href="/cgv" target="_blan
 EOT;
 
 		return Html::_div(
-			array('class' => 'cgv form-check'),
+			array('class' => 'cgv form-check', 'id' => 'pkmgmt-cgv'),
 			Html::_index('hidden', '', 'cgv_reservation', array('value' => '0')),
 			Html::_index(
 				'checkbox',
 				'cgv_reservation',
 				'cgv_reservation',
 				array(
-					'class' => 'cgv_reservation required form-check-input',
+					'class' => 'cgv_reservation form-check-input' . ($required ? ' required' : ''),
 					'value' => "1",
-					'tabindex' => "16",
 					'data-msg-required' => $warning_msg,
 				),
 				false,
 				false,
-				(array_key_exists('cgv_reservation', $post) ? $post['cgv_reservation'] : '0') == '1'
+				$required && (array_key_exists('cgv_reservation', $post) ? $post['cgv_reservation'] : '0') == '1'
 			),
 			Html::_label_with_attr(array('class' => 'form-check-label black'), 'cgv_reservation', $msg),
 		);
@@ -675,7 +755,7 @@ EOT;
 			),
 				Html::_index('hidden', 'aeroport', 'aeroport', array('value' => Order::getSiteID($this->site['airport'] ?? 'orly')->value)),
 				Html::_index('hidden', 'pkmgmt_action', 'pkmgmt_action', array('value' => 'booking')),
-				'<button type="submit" tabindex="17" id="submit" name="submit" class="form-control btn btn-primary text-center" disabled>'
+				'<button type="submit" id="submit" name="submit" class="form-control btn btn-primary text-center" disabled>'
 				. esc_html__('Pay and validate', 'parking-management')
 				. ' <i class="fa-regular fa-circle-right"></i>'
 				. '</button>'
@@ -685,38 +765,39 @@ EOT;
 		);
 	}
 
+	/**
+	 * Always rendered, same reasoning as cgv()/options() - dialog_confirmation is a
+	 * per-site flag and the visitor can switch sites client-side via the Step 1 selector,
+	 * so gating this on whichever site was current at page-load time meant enabling it on
+	 * a non-default site had no visible effect (the modal simply didn't exist in the DOM
+	 * for form.js to open). jQuery UI's dialog() is initialized with autoOpen:false
+	 * regardless, so always rendering/initializing it is harmless either way.
+	 */
 	public function dialog_booking_confirmation(): string
 	{
 		$post = array_merge($_GET, $_POST);
-		$form = $this->site['form'] ?? [];
-		if (($form['dialog_confirmation'] ?? '0') != '1') {
-			return '';
-		}
 		return '<div id="dialog_booking_confirmation" title="' . esc_html__('Confirmation', 'parking-management') . '">
+	<p class="pkmgmt-dialog-intro">' . esc_html__('Please double-check your dates and email before paying.', 'parking-management') . '</p>
 	<form id="confirmation" name="confirmation" method="post" action="">
-		<div class="row">
-			<div>
+		<div class="row g-3">
+			<div class="col-12">
 				<label class="form-label" for="depart2">' . esc_html__('Dropping off at', 'parking-management') . '</label>
 				<input tabindex="19" type="text" id="depart2" name="depart" class="departure regular required border rounded form-control py-2" autocomplete="off" value="' . ($post['depart'] ?? '') . '">
 			</div>
-			<div>
-					<label class="form-label" for="retour2">' . esc_html__('Landing at the airport', 'parking-management') . '</label>
-					<input tabindex="-1" type="text" id="retour2" name="retour" class="return regular required border rounded form-control py-2" autocomplete="off" value="' . ($post['retour'] ?? '') . '">
+			<div class="col-12">
+				<label class="form-label" for="retour2">' . esc_html__('Landing at the airport', 'parking-management') . '</label>
+				<input tabindex="-1" type="text" id="retour2" name="retour" class="return regular required border rounded form-control py-2" autocomplete="off" value="' . ($post['retour'] ?? '') . '">
 			</div>
-			<div class="mb-3">
-				<div class="col email">
-					<label class="label form-label" for="email2">' . esc_html__('Email', 'parking-management') . '</label>
-					<input tabindex="18" type="email" id="email2" name="email" class="email regular required col-5 border rounded py-2 px-3 form-control" value="' . ($post['email'] ?? '') . '">
-				</div>
+			<div class="col-12">
+				<label class="label form-label" for="email2">' . esc_html__('Email', 'parking-management') . '</label>
+				<input tabindex="18" type="email" id="email2" name="email" class="email regular required border rounded py-2 px-3 form-control" value="' . ($post['email'] ?? '') . '">
 			</div>
 		</div>
-        <div class="row my-3 position-absolute bottom-0 start-50 translate-middle-x">
-			<div class="col">
-                <button tabindex="20" id="submit2" class="form-control btn btn-primary text-center gradient-e97445" name="submit2" type="submit">
-                    ' . esc_html__('Confirm your order', 'parking-management') . '
-                    <i class="fa-regular fa-circle-right"></i>
-				</button>
-			</div>
+		<div class="pkmgmt-dialog-actions">
+			<button tabindex="20" id="submit2" class="btn btn-primary w-100" name="submit2" type="submit">
+				' . esc_html__('Confirm your order', 'parking-management') . '
+				<i class="fa-regular fa-circle-right"></i>
+			</button>
 		</div>
 	</form>
 </div>';

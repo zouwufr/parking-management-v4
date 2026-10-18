@@ -13,6 +13,27 @@
 	--pkmgmt-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* Bootstrap's .container-md (booking.php's wrapper around the whole wizard) caps
+ * out at 720-1320px depending on breakpoint, which reads cramped once the 3-step
+ * layout has room to breathe on a real desktop screen. Widen it from lg (992px)
+ * up only - .home-form keeps Bootstrap's untouched default, this targets the
+ * booking wizard's wrapper specifically via its sibling `.form` class.
+ * !important: block themes (e.g. Twenty Twenty-Five) also cap this element via
+ * `.is-layout-constrained > :where(...) { max-width: var(--wp--style--global--
+ * content-size) }` - our class selector already outranks that :where()-based one
+ * on specificity, but !important removes any doubt regardless of theme/markup. */
+@media (min-width: 992px) {
+	.form.container-md {
+		max-width: 900px !important;
+	}
+}
+
+@media (min-width: 1200px) {
+	.form.container-md {
+		max-width: 1040px !important;
+	}
+}
+
 .title {
 	line-height: 1.3 !important;
 	font-family: var(--pkmgmt-font);
@@ -337,6 +358,137 @@ form#reservation div.radio.pkmgmt-hidden {
 	display: none !important;
 }
 
+/* Same "beat Bootstrap's !important" rationale as .pkmgmt-hidden above - a step's
+ * fieldset may itself use d-flex/d-grid utilities internally, so this hide rule is
+ * scoped + !important rather than relying on a plain inline display:none. */
+form#reservation fieldset.pkmgmt-step.pkmgmt-step-hidden {
+	display: none !important;
+}
+
+/* --- Step wizard progress indicator + nav (mobile-first: base styles target narrow
+ * screens, layered min-width queries add detail on larger ones - unlike the max-width
+ * retrofits further down this file, this block is written mobile-first from the start).
+ *
+ * "Booking steps" design: connected numbered-circle stepper (vs. the earlier
+ * underline-tabs look) - each step is a circle on a horizontal connecting line;
+ * the active circle is filled solid, a completed circle (form.js toggles
+ * .pkmgmt-progress-step-done once its step is passed) gets a checkmark and a
+ * tinted line segment leading into it, so progress reads at a glance. */
+.pkmgmt-progress {
+	margin: 0 0 1.5rem;
+}
+.pkmgmt-progress ul {
+	list-style: none;
+	display: flex;
+	padding: 0;
+	margin: 0;
+}
+.pkmgmt-progress-step {
+	position: relative;
+	flex: 1 1 0;
+	text-align: center;
+	color: var(--pkmgmt-text-muted);
+}
+.pkmgmt-progress-step::before {
+	content: '';
+	position: absolute;
+	top: 15px;
+	left: -50%;
+	width: 100%;
+	height: 2px;
+	background: var(--pkmgmt-border);
+	z-index: 0;
+}
+.pkmgmt-progress-step:first-child::before {
+	content: none;
+}
+.pkmgmt-progress-number {
+	position: relative;
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: #fff;
+	border: 2px solid var(--pkmgmt-border);
+	color: var(--pkmgmt-text-muted);
+	font-size: .8rem;
+	font-weight: 700;
+	line-height: 1;
+}
+.pkmgmt-progress-label {
+	display: none;
+	margin-top: .4rem;
+	font-size: .7rem;
+}
+.pkmgmt-progress-step[aria-current="step"] {
+	color: var(--pkmgmt-primary);
+	font-weight: 700;
+}
+.pkmgmt-progress-step[aria-current="step"] .pkmgmt-progress-number {
+	border-color: var(--pkmgmt-primary);
+	background: var(--pkmgmt-primary);
+	color: #fff;
+	box-shadow: 0 0 0 4px var(--pkmgmt-primary-light);
+}
+.pkmgmt-progress-step.pkmgmt-progress-step-done {
+	color: var(--pkmgmt-primary);
+}
+.pkmgmt-progress-step.pkmgmt-progress-step-done::before {
+	background: var(--pkmgmt-primary);
+}
+.pkmgmt-progress-step.pkmgmt-progress-step-done .pkmgmt-progress-number {
+	border-color: var(--pkmgmt-primary);
+	background: var(--pkmgmt-primary-light);
+	color: var(--pkmgmt-primary);
+	font-size: 0;
+}
+.pkmgmt-progress-step.pkmgmt-progress-step-done .pkmgmt-progress-number::after {
+	content: '\2713';
+	font-size: .85rem;
+}
+
+@media (min-width: 576px) {
+	.pkmgmt-progress-label {
+		display: block;
+	}
+}
+@media (min-width: 768px) {
+	.pkmgmt-progress-number {
+		width: 34px;
+		height: 34px;
+		font-size: .9rem;
+	}
+	.pkmgmt-progress-step::before {
+		top: 17px;
+	}
+	.pkmgmt-progress-label {
+		font-size: .8rem;
+	}
+}
+
+.pkmgmt-step-actions {
+	display: flex;
+	flex-direction: column;
+	gap: .5rem;
+	margin-top: 1.25rem;
+}
+.pkmgmt-step-actions .btn {
+	width: 100%;
+}
+
+@media (min-width: 576px) {
+	.pkmgmt-step-actions {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+	.pkmgmt-step-actions .btn {
+		width: auto;
+	}
+}
+
 form#reservation div.type-id label:hover {
 	cursor: pointer;
 }
@@ -364,7 +516,12 @@ form#reservation div.type-id div label:hover {
 ** input
  */
 
-form#reservation input {
+/* Excludes checkbox/radio: unscoped, this id-selector rule outranks Bootstrap's
+ * .form-check-input class rule and forces every checkbox (keep_keys/ev_charging/
+ * cancellation_insurance) into a 46px-tall, pill-radius box instead of its normal
+ * 1em square - radios are already hidden via display:none so they're unaffected
+ * either way, but excluding them here too keeps this rule's intent explicit. */
+form#reservation input:not([type="checkbox"]):not([type="radio"]) {
 	height: 46px;
 	border-radius: var(--pkmgmt-radius-sm);
 }
@@ -589,6 +746,171 @@ label.error {
 	color: var(--pkmgmt-text);
 }
 
-.options-switch {
-	padding: 0 !important;
+/*
+** opt-in option checkboxes (keep_keys/ev_charging/cancellation_insurance)
+*/
+
+/* The opt-in checkboxes render with no wrapper/margin of their own, unlike every
+ * other field on the form - which uses Form::_row_field()'s `.row.mb-3` - so they
+ * rendered crammed against each other and against the field above. Also lay them
+ * out with flex instead of relying on Bootstrap's .form-check float/negative-margin
+ * positioning, which is fragile to override (see .options-checkbox below). */
+#reservation .option-wrapper,
+#reservation .options-container {
+	display: flex;
+	align-items: center;
+	margin-bottom: 1rem;
+}
+
+/* Self-contained custom checkbox, independent of Bootstrap's .form-check-input -
+ * pins appearance/size/radius itself instead of depending on that rule winning the
+ * cascade, so it can't be silently broken by another stylesheet's load order or
+ * specificity (as .options-switch's padding override already did once this session). */
+#reservation .options-checkbox {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	flex: 0 0 auto;
+	width: 22px;
+	height: 22px;
+	margin: 0 .75rem 0 0;
+	padding: 0;
+	border: 2px solid var(--pkmgmt-border);
+	border-radius: 6px;
+	background-color: #fff;
+	cursor: pointer;
+	position: relative;
+	transition: background-color .15s ease, border-color .15s ease;
+}
+
+#reservation .options-checkbox:hover {
+	border-color: var(--pkmgmt-primary);
+}
+
+#reservation .options-checkbox:checked {
+	background-color: var(--pkmgmt-primary);
+	border-color: var(--pkmgmt-primary);
+}
+
+#reservation .options-checkbox:checked::after {
+	content: '';
+	position: absolute;
+	left: 6px;
+	top: 2px;
+	width: 6px;
+	height: 11px;
+	border: solid #fff;
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+
+#reservation .options-checkbox:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 .2rem var(--pkmgmt-primary-light);
+}
+
+#reservation .options-checkbox ~ .form-check-label {
+	cursor: pointer;
+}
+
+/*
+** confirmation dialog (jQuery UI dialog, styled to match the rest of the booking
+** form - unstyled it fell back to jQuery UI's bare base theme, clashing with
+** everything else here). `.pkmgmt-dialog*` classes come from the `classes` option
+** passed to .dialog() in form.js (jQuery UI 1.14 appends them alongside its own
+** ui-dialog* classes rather than replacing them, so its JS behavior is untouched).
+*/
+
+.ui-widget-overlay {
+	background: rgba(26, 31, 41, 0.55);
+}
+
+.pkmgmt-dialog.ui-dialog {
+	padding: 0;
+	border: none;
+	border-radius: var(--pkmgmt-radius);
+	box-shadow: 0 20px 50px rgba(16, 24, 40, 0.25), 0 2px 8px rgba(16, 24, 40, 0.08);
+	overflow: hidden;
+	font-family: var(--pkmgmt-font);
+	max-width: calc(100vw - 2rem) !important;
+}
+
+.pkmgmt-dialog .ui-dialog-titlebar.pkmgmt-dialog-titlebar {
+	background: var(--pkmgmt-primary);
+	color: #fff;
+	border: none;
+	border-radius: 0;
+	padding: 1rem 1.25rem;
+}
+
+.pkmgmt-dialog .ui-dialog-title {
+	font-weight: 700;
+	font-size: 1.05rem;
+}
+
+.pkmgmt-dialog .ui-dialog-titlebar-close.pkmgmt-dialog-close {
+	background: rgba(255, 255, 255, 0.15);
+	border: none;
+	border-radius: 50%;
+	color: #fff;
+	top: 50%;
+	right: 1rem;
+	margin-top: -13px;
+	width: 26px;
+	height: 26px;
+	transition: background-color .15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.pkmgmt-dialog .ui-dialog-titlebar-close.pkmgmt-dialog-close:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* jQuery UI's base theme boxes .ui-icon to 16x16px with overflow:hidden (for its sprite
+ * background-image, which never loads correctly off the cdnjs-hosted theme CSS - a classic
+ * jQuery-UI-via-CDN gotcha), clipping anything added via ::before on that inner span. Hide
+ * the sprite span entirely and put the "x" directly on the outer button instead, which isn't
+ * boxed in. */
+.pkmgmt-dialog .ui-dialog-titlebar-close.pkmgmt-dialog-close .ui-icon {
+	display: none;
+}
+
+.pkmgmt-dialog .ui-dialog-titlebar-close.pkmgmt-dialog-close::before {
+	content: '\00d7';
+	font-size: 1.2rem;
+	line-height: 1;
+	color: #fff;
+}
+
+.pkmgmt-dialog .ui-dialog-content {
+	padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.pkmgmt-dialog-intro {
+	color: var(--pkmgmt-text-muted);
+	font-size: .9rem;
+	margin: 0 0 1.1rem;
+}
+
+#confirmation .form-label {
+	color: var(--pkmgmt-text);
+	font-weight: 600;
+	font-size: .9rem;
+	margin-bottom: .35rem;
+}
+
+#confirmation input {
+	height: 46px;
+	border-radius: var(--pkmgmt-radius-sm);
+}
+
+#confirmation input:focus {
+	border-color: var(--pkmgmt-primary);
+	box-shadow: 0 0 0 .2rem var(--pkmgmt-primary-light);
+}
+
+.pkmgmt-dialog-actions {
+	margin-top: 1.5rem;
 }

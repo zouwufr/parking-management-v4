@@ -113,7 +113,7 @@ class Payment implements IShortcode, IParkingManagement
 		try {
 			$order = new Order();
 			$row = $order->read($this->order_id);
-			$site = Site::find($row['parking_id']);
+			$site = Site::findByLegacySiteId($row['parking_id']);
 		} catch (Exception $e) {
 			Logger::error('payment.resolveSiteFromOrder', $e->getMessage());
 		}

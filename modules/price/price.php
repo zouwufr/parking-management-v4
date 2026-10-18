@@ -2,6 +2,7 @@
 
 namespace ParkingManagement;
 
+use Booking\Airport;
 use Booking\Order;
 use Booking\ParkingType;
 use Booking\Site;
@@ -90,7 +91,7 @@ class Price implements IShortcode, IParkingmanagement
 
 			$realNumberOfDay = $numberOfDay = Order::nbRealDay($start, $end);
 			// Get lot availability
-			$siteId = Order::getSiteID($site['airport']);
+			$siteId = Order::resolveLegacySiteID($site);
 			$maxLot = Booked::getMaxLot($start, $end, $siteId);
 			$usedLot = Booked::usedLot($start, $end, $siteId);
 			$maxUsedLot = max($usedLot);
@@ -319,8 +320,12 @@ class Price implements IShortcode, IParkingmanagement
 		$conn = database::connect();
 		if ($conn === false)
 			throw new Exception("Database connection failed");
+		// %% escapes the literal MySQL DATE_FORMAT() tokens below from wpdb::prepare()'s
+		// own placeholder parsing - unescaped, "%d" is indistinguishable from a real %d
+		// value placeholder, miscounting this query's placeholders against the single
+		// %s argument actually passed.
 		if ($row = $conn->get_row(
-			$conn->prepare("SELECT DATE_FORMAT(`date`, '%d/%m/%Y') as `date`, `titre` FROM `tbl_ferie` WHERE `date` = %s", [$date]),
+			$conn->prepare("SELECT DATE_FORMAT(`date`, '%%d/%%m/%%Y') as `date`, `titre` FROM `tbl_ferie` WHERE `date` = %s", [$date]),
 			ARRAY_A
 		)) {
 			return !empty($row);
@@ -333,13 +338,23 @@ class Price implements IShortcode, IParkingmanagement
 	 * `tbl_remplissage.grille_tarifaire` column - the same row/table
 	 * `Booked::getMaxLot()`/`usedLot()` already read `client`/`employe`/`utilisee`
 	 * from - and reshapes it into this plugin's own
-	 * `tariffs[vehicle][parking_type][day]` grid for the given airport. Used by
-	 * the admin "Load from DB" action to prefill a site's Price tab from data the
-	 * legacy system already has, instead of hand-typing or CSV-importing it.
+	 * `tariffs[vehicle][parking_type][day]` grid for the given legacy site id (Airport::value,
+	 * aka parking_id in the legacy grid - see Order::resolveLegacySiteID()). Used by the admin
+	 * "Load from DB" action to prefill a site's Price tab from data the legacy system already
+	 * has, instead of hand-typing or CSV-importing it.
 	 * @throws Exception
 	 */
-	public function loadFromDatabase(string $airport): array
+	public function loadFromDatabase(string $legacySiteId): array
 	{
+		if ($legacySiteId === '' || !is_numeric($legacySiteId)) {
+			return [];
+		}
+		try {
+			$parkingId = Airport::fromInt((int)$legacySiteId)->value;
+		} catch (InvalidArgumentException) {
+			return [];
+		}
+
 		$conn = database::connect();
 		if (!$conn) {
 			throw new Exception("Database connection failed");
@@ -356,7 +371,6 @@ class Price implements IShortcode, IParkingmanagement
 		if (!is_array($grid)) {
 			return [];
 		}
-		$parkingId = Order::getSiteID($airport)->value;
 		$siteGrid = $grid[$parkingId] ?? [];
 		if (!is_array($siteGrid)) {
 			return [];

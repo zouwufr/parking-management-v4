@@ -96,6 +96,19 @@ document.addEventListener('DOMContentLoaded', function () {
 		}).join('');
 	}
 
+	function legacySiteOptionsMarkup(selected) {
+		return (sitesConfig.legacy_sites || []).map(function (site) {
+			return `<option value="${site.value}" ${site.value === selected ? 'selected' : ''}>${site.label}</option>`;
+		}).join('');
+	}
+
+	// Matches Order::getSiteID()'s airport-based default (orly -> 1, roissy -> 2), used only
+	// to preselect a sensible value for a brand-new site - distinct businesses sharing one
+	// airport (e.g. Orly's "CoverPark") are picked explicitly afterwards, see legacy-site-select.
+	function defaultLegacySiteFor(airportKey) {
+		return airportKey === 'roissy' ? '2' : '1';
+	}
+
 	// Valet is only ever offered for cars.
 	function parkingTypesFor(vehicle) {
 		return vehicle === 'car' ? ['ext', 'int', 'valet'] : ['ext', 'int'];
@@ -230,20 +243,23 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	// Pulls the legacy system's own tariff grid (tbl_remplissage.grille_tarifaire) for this
-	// site's airport and prefills the grid below - nothing is saved until "Save" is clicked.
+	// site's legacy site id and prefills the grid below - nothing is saved until "Save" is
+	// clicked. Keyed by legacy-site-select, not airport-select: more than one legally distinct
+	// parking business can share an airport (e.g. Orly also hosts "CoverPark"), so the airport
+	// alone can't tell the legacy system which grid to return.
 	$(document).on('click', '.price-load-db', function (event) {
 		event.preventDefault();
 		const $button = $(this);
 		const $siteItem = $button.closest('.site-item');
-		const airport = $siteItem.find('.airport-select').val();
-		if (!airport || typeof pkmgmt_sites_config.rest_url === 'undefined') {
+		const legacySiteId = $siteItem.find('.legacy-site-select').val();
+		if (!legacySiteId || typeof pkmgmt_sites_config.rest_url === 'undefined') {
 			return;
 		}
 		$button.prop('disabled', true);
 		$.ajax({
 			url: pkmgmt_sites_config.rest_url + 'prices/db-grid',
 			method: 'GET',
-			data: {airport: airport},
+			data: {legacy_site_id: legacySiteId},
 			beforeSend: function (xhr) {
 				xhr.setRequestHeader('X-WP-Nonce', pkmgmt_sites_config.nonce);
 			}
@@ -251,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (tariffs && Object.keys(tariffs).length) {
 				applyTariffGrid($siteItem, tariffs);
 			} else {
-				window.alert('No tariff data found in the database for this airport.');
+				window.alert('No tariff data found in the database for this site.');
 			}
 		}).fail(function () {
 			window.alert('Failed to load tariffs from the database.');
@@ -285,21 +301,27 @@ document.addEventListener('DOMContentLoaded', function () {
 					<i class="fas fa-trash delete-site ms-3" title="Remove"></i>
 				</div>
 				<div class="row">
-					<div class="col-sm-4">
+					<div class="col-sm-3">
 						<label for="site-${id}-airport">Airport</label><br/>
 						<select id="site-${id}-airport" name="${name}[airport]" class="airport-select">
 							${airportOptionsMarkup(defaultAirport)}
 						</select>
 					</div>
-					<div class="col-sm-4 terminal-container">
+					<div class="col-sm-3 terminal-container">
 						<label for="site-${id}-terminal">Terminal</label><br/>
 						<select id="site-${id}-terminal" name="${name}[terminal]">
 							${terminalOptionsMarkup(defaultAirport)}
 						</select>
 					</div>
-					<div class="col-sm-4 location_field vehicle-types-container">
+					<div class="col-sm-3 location_field vehicle-types-container">
 						<label>Vehicle types</label><br/>
 						${vehicleTypesMarkup(name)}
+					</div>
+					<div class="col-sm-3 location_field">
+						<label for="site-${id}-legacy-site">Legacy site (DB)</label><br/>
+						<select id="site-${id}-legacy-site" name="${name}[legacy_site_id]" class="legacy-site-select">
+							${legacySiteOptionsMarkup(defaultLegacySiteFor(defaultAirport))}
+						</select>
 					</div>
 				</div>
 				<div class="row">
