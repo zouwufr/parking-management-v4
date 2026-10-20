@@ -52,15 +52,16 @@ class Booking implements IShortcode, IParkingManagement
 				Html::_div(array('class' => 'row'),
 					Html::_div(array('class' => 'col-12'),
 						Html::_form('reservation', 'reservation', 'post', '', array(),
+							$form->progress_indicator(),
 							Html::_div(array('class' => 'row'),
 								Html::_div(array('class' => 'col-12'),
-									$form->personal_information(),
-									$form->trip_information(),
+									$form->step_location_and_dates(),
+									$form->step_vehicle_and_parking(),
+									$form->step_your_details(),
+									$form->total(),
+									$form->cgv(),
+									$form->submit(),
 								),
-								$form->options(),
-								$form->cgv(),
-								$form->total(),
-								$form->submit(),
 							)
 						)
 					)
@@ -105,7 +106,6 @@ class Booking implements IShortcode, IParkingManagement
 
 	public function record(): void
 	{
-		global $current_shortcode_page;
 		$post = array_merge($_GET, $_POST);
 		$page = home_url();
 
@@ -145,9 +145,19 @@ class Booking implements IShortcode, IParkingManagement
 
 		} catch (Exception $e) {
 			Logger::error("booking.record", $e->getMessage());
-			unset($post['pkmgmt_action'], $post['submit2']);
-			wp_redirect($current_shortcode_page . '?' . http_build_query($post) . '&message[error]=' . $e->getMessage());
-			return;
+			// $current_shortcode_page is only ever assigned while the [parking-management]
+			// shortcode itself renders (includes/shortcode.php) - this code runs on the
+			// `init` hook instead, which always fires *before* that happens on this same
+			// request, so the global is unconditionally still "" here. wp_redirect("" . '?'
+			// . ...) resolves as a query-only relative reference, which browsers happen to
+			// resolve against the current path - fragile, and it stacked a duplicate
+			// message[error] param on every retry since the referer's own query string
+			// (including any previous message[error]) was never stripped. wp_get_referer()
+			// (the actual page the form was submitted from) is reliable here instead.
+			$page = strtok(wp_get_referer() ?: home_url(), '?');
+			unset($post['pkmgmt_action'], $post['submit2'], $post['message']);
+			wp_redirect($page . '?' . http_build_query($post) . '&message[error]=' . $e->getMessage());
+			exit(0);
 		}
 	}
 

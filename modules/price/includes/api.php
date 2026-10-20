@@ -70,8 +70,8 @@ class PriceAPI extends API
 						return current_user_can('manage_options');
 					},
 					'args' => array(
-						'airport' => array(
-							'description' => "Airport key to resolve the legacy parking_id from",
+						'legacy_site_id' => array(
+							'description' => "Legacy parking_id (tbl_remplissage/tbl_commande) to load the tariff grid for",
 							'type' => "string",
 							'required' => true,
 						),
@@ -83,7 +83,7 @@ class PriceAPI extends API
 
 	/**
 	 * Admin-only: pulls the legacy system's own tariff grid (tbl_remplissage.grille_tarifaire)
-	 * for the given airport, used to prefill a site's Price tab from the database.
+	 * for the given legacy site id, used to prefill a site's Price tab from the database.
 	 *
 	 * @param WP_REST_Request $request Full details about the request.
 	 * @return WP_Error|WP_REST_Response Response object on success, or WP_Error object on failure.
@@ -93,7 +93,7 @@ class PriceAPI extends API
 		try {
 			$pm = getParkingManagementInstance();
 			$price = new Price($pm);
-			$data = $price->loadFromDatabase($request->get_param('airport'));
+			$data = $price->loadFromDatabase($request->get_param('legacy_site_id'));
 		} catch (Exception $e) {
 			Logger::error("price.api.get_db_grid", $e->getMessage());
 			return new WP_Error('error', $e->getMessage());

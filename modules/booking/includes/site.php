@@ -58,6 +58,29 @@ class Site
 	}
 
 	/**
+	 * Finds the site whose legacy parking identity (Order::resolveLegacySiteID(),
+	 * aka parking_id/site_id in the legacy tbl_commande grid) matches the given
+	 * value. Used to recover the plugin site from an order row's `parking_id` (or
+	 * `site_id`) column - both now always hold the same legacy value, not this
+	 * plugin's own site config key - in contexts with no `site_id` request param
+	 * (payment provider redirect, webhook, notification page).
+	 */
+	public static function findByLegacySiteId(string|int $legacySiteId): ?array
+	{
+		$legacySiteId = (string)$legacySiteId;
+		foreach (self::all() as $id => $site) {
+			if (!is_array($site)) {
+				continue;
+			}
+			$site['id'] = (string)$id;
+			if ((string)Order::resolveLegacySiteID($site)->value === $legacySiteId) {
+				return $site;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Resolves the site for the current request: whatever `site_id` was submitted
 	 * (GET, POST, or REST param already merged into $_REQUEST), falling back to the
 	 * first active site when none was submitted or it no longer exists.

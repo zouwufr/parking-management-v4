@@ -87,6 +87,7 @@ class Admin
 			array(
 				'airports' => Terminal::airportOptions(),
 				'terminals' => $terminals,
+				'legacy_sites' => Terminal::legacySiteOptions(),
 				'vehicle_types' => array(
 					'car' => __('Car', 'parking-management'),
 					'motorcycle' => __('Motorcycle', 'parking-management'),

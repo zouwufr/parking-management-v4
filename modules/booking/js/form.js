@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			data: $('#reservation').serialize(),
 			processData: true,
 			dataType: 'json',
-			async: false,
 			error: function (e, f, g) {
 				console.error("get price failed", f);
 			},
@@ -48,9 +47,12 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 	getPrice();
 	function switchSubmitBtn() {
+		// #cgv_reservation is always rendered (see refreshTermsAndConditions()) - only
+		// gate on it when the current site actually requires it (the 'required' class,
+		// kept in sync with the selected site), not on mere DOM presence.
 		if (
 			parseInt($('#total_amount').val()) > 0
-			&& (external_object.form_options.terms_and_conditions == '0' || $('#cgv_reservation').is(':checked'))
+			&& (!$('#cgv_reservation').hasClass('required') || $('#cgv_reservation').is(':checked'))
 		)
 			$("#submit").removeAttr("disabled");
 		else
@@ -60,9 +62,22 @@ document.addEventListener('DOMContentLoaded', function () {
 	$('#cgv_reservation').on('change', function () {
 		switchSubmitBtn($(this).is(':checked'))
 	});
-	$('#depart, #return, #nb_pax, .options-checkbox, input.type-id, input.parking-type').on('change', function () {
+	$('#depart, #retour, #nb_pax, .options-checkbox, input.type-id, input.parking-type').on('change', function () {
 		getPrice();
 	})
+
+	// Some block themes (e.g. the sandbox's Twenty Twenty-Five) wrap page content in
+	// containers using CSS containment/container-query properties, which - like
+	// `transform` - creates a new containing block for `position: fixed` descendants,
+	// so the spinner only covered that wrapper instead of the full viewport. Moving it
+	// to be a direct child of <body> sidesteps that regardless of theme markup.
+	function showSpinner() {
+		const $spinner = $('#spinner-container');
+		if ($spinner.length && !$spinner.parent().is('body')) {
+			$spinner.appendTo('body');
+		}
+		$spinner.css('display', 'flex');
+	}
 
 	// Parking site: filters vehicle types / storage type / terminals to what the
 	// selected site actually supports, since each site has its own tariff. The
@@ -79,6 +94,14 @@ document.addEventListener('DOMContentLoaded', function () {
 	function currentSite() {
 		const sites = external_object.sites || {};
 		return sites[currentSiteId()];
+	}
+
+	// dialog_confirmation is a per-site flag (see sites[].dialog_confirmation) - checking the
+	// currently selected site here, rather than a page-load-time snapshot, matters for the
+	// same reason as refreshTermsAndConditions(): the visitor can switch sites client-side.
+	function dialogConfirmationEnabled() {
+		const site = currentSite();
+		return !!(site && site.dialog_confirmation === '1');
 	}
 
 	// parking_type options shown = site's enabled types, minus valet unless the
@@ -109,13 +132,13 @@ document.addEventListener('DOMContentLoaded', function () {
 				$(this).prop('checked', false);
 			}
 		});
-		// Note: the radio inputs themselves are always display:none by design (form.css
-		// hides them so only the pill-styled <label> shows) - jQuery's :visible filter on
-		// the <input> is therefore always false. Check the wrapping .radio div instead,
-		// which is what setRadioHidden() above actually shows/hides. :visible also
-		// correctly reflects the pkmgmt-hidden class since it's a real CSS display:none.
+		// Check site-support (the pkmgmt-hidden class) directly rather than :visible -
+		// once these radios can also be hidden because their wizard STEP isn't the
+		// active one (unrelated to site support), :visible would be false for every
+		// radio whenever the user isn't on that step, breaking this fallback whenever
+		// the site changes from a different step (e.g. Step 1's site-select).
 		const $visibleParkingType = $parkingTypeRadios.filter(function () {
-			return $(this).closest('.radio').is(':visible');
+			return !$(this).closest('.radio').hasClass('pkmgmt-hidden');
 		});
 		if ($visibleParkingType.length && !$visibleParkingType.is(':checked')) {
 			$visibleParkingType.first().prop('checked', true);
@@ -152,6 +175,27 @@ document.addEventListener('DOMContentLoaded', function () {
 		});
 	}
 
+	// terms_and_conditions: a plain per-site on/off flag (unlike options(), it has no
+	// price/label to vary) - always rendered server-side for the same reason as options()
+	// above, since the visitor can switch sites client-side: a non-default site enabling it
+	// had no visible effect when the checkbox only existed in the DOM for whichever site
+	// happened to be current at page-load time. jQuery Validate reads the 'required' class
+	// fresh on each check, so toggling it here keeps validation in sync with the checkbox.
+	function refreshTermsAndConditions(site) {
+		const $wrapper = $('#pkmgmt-cgv');
+		if (!$wrapper.length) {
+			return;
+		}
+		const $checkbox = $('#cgv_reservation');
+		const required = !!(site && site.terms_and_conditions === '1');
+		$wrapper.toggle(required);
+		$checkbox.toggleClass('required', required);
+		if (!required && $checkbox.is(':checked')) {
+			$checkbox.prop('checked', false);
+		}
+		$('#reservation').validate().element('#cgv_reservation');
+	}
+
 	function applySite(siteId) {
 		const sites = external_object.sites || {};
 		const site = sites[siteId];
@@ -161,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			setRadioHidden($typeIdRadios.closest('.radio'), false);
 			refreshParkingTypeOptions(null);
 			refreshOptions(null);
+			refreshTermsAndConditions(null);
 			return;
 		}
 
@@ -172,10 +217,9 @@ document.addEventListener('DOMContentLoaded', function () {
 				$(this).prop('checked', false);
 			}
 		});
-		// Same :visible caveat as refreshParkingTypeOptions() above - check the wrapping
-		// .radio div, not the permanently display:none <input>.
+		// Same site-support-vs-step-visibility caveat as refreshParkingTypeOptions() above.
 		const $visibleTypeId = $typeIdRadios.filter(function () {
-			return $(this).closest('.radio').is(':visible');
+			return !$(this).closest('.radio').hasClass('pkmgmt-hidden');
 		});
 		if ($visibleTypeId.length && !$visibleTypeId.is(':checked')) {
 			$visibleTypeId.first().prop('checked', true);
@@ -183,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 		refreshParkingTypeOptions(site);
 		refreshOptions(site);
+		refreshTermsAndConditions(site);
 
 		const terminals = (external_object.terminals && external_object.terminals[site.airport]) || [];
 		$('#terminal_depart, #terminal_arrivee').each(function () {
@@ -198,6 +243,120 @@ document.addEventListener('DOMContentLoaded', function () {
 		});
 	}
 
+	// Validation
+	// Must be initialized before anything below can call the bare $('#reservation').validate()
+	// (e.g. refreshTermsAndConditions(), reached synchronously via .trigger('change') right
+	// after this block) - jQuery Validate only honors the FIRST .validate(...) call made on a
+	// given form; every later call (with or without options) just returns that same instance
+	// and silently ignores any options passed to it. Previously this real config (rules +
+	// submitHandler) was declared near the bottom of the file, by which point the bare call
+	// below had already created the validator with no rules and no submitHandler - so this
+	// form was always falling through to a plain, unvalidated native submission.
+	$.validator.addMethod(
+		"customMobile",
+		function () {
+			return !!iti.isValidNumber();
+		},
+		"Vérifiez le numéro de téléphone"
+	);
+
+	if (external_object.locale === 'fr_FR')
+		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_fr.min.js");
+	if (external_object.locale === 'de_DE')
+		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_de.min.js");
+	if (external_object.locale === 'nl_NL')
+		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_nl.min.js");
+	$("#reservation").validate({
+		// jQuery Validate defaults to ignoring :hidden fields entirely. Every step but the
+		// current one is hidden via .pkmgmt-step-hidden (display:none !important), so without
+		// this the final submit was only ever validating whichever step happened to be open,
+		// silently skipping the other two - this is what let incomplete steps through.
+		ignore: [],
+		rules: {
+			nom: {
+				minlength: 2,
+				required: true
+			},
+			prenom: {
+				minlength: 2,
+				required: true
+			},
+			code_postal: {
+				digits: true,
+				required: true
+			},
+			mobile: {
+				customMobile: true,
+				required: true
+			},
+			email: {
+				required: true,
+				email: true
+			},
+			modele: {
+				required: true,
+				minlength: 2
+			},
+			immatriculation: {
+				required: true,
+				minlength: 2
+			},
+			destination: {
+				required: true,
+				minlength: 2
+			},
+			depart: {
+				required: true,
+			},
+			retour: {
+				required: true,
+			},
+			nb_pax: {
+				required: true,
+			}
+		},
+
+		// Jumps back to whichever step holds the first invalid field, so form.js's error
+		// label is never rendered behind a hidden .pkmgmt-step - fires before showErrors()
+		// runs (jQuery Validate triggers invalid-form, then shows errors), so by the time
+		// the error is actually displayed the right step is already visible.
+		// jumpToFirstInvalidStep() is a function declaration defined further down in this
+		// same scope - safe to reference here since it's hoisted and only ever called once
+		// the whole script (and thus that declaration) has already run.
+		invalidHandler: function (event, validator) {
+			jumpToFirstInvalidStep(validator);
+		},
+
+		submitHandler: function (form) {
+			if (dialogConfirmationEnabled()) {
+				// Don't rely on the main picker's 'select' event (or #email's 'change') having
+				// fired at some earlier point to have kept depart2/retour2/email2 in sync - if
+				// the value was already correct before that listener was ever triggered (e.g.
+				// a pre-filled reload, or the user never re-picked after an earlier edit), it
+				// never would have. Sync explicitly from the real, just-validated fields right
+				// before the dialog opens, which is the one moment these actually need to be
+				// correct regardless of history.
+				syncValues('#depart', '#depart2');
+				syncValues('#retour', '#retour2');
+				syncValues('#email', '#email2');
+				easepickCreate(
+					$('#depart2').get(0),
+					$('#retour2').get(0),
+					1,
+					function () {
+						syncValues('#depart2', '#depart');
+						syncValues('#retour2', '#retour');
+						getPrice();
+					}
+				);
+				dialogConfirm.dialog("open");
+			} else {
+				showSpinner();
+				form.submit();
+			}
+		}
+	})
+
 	$('.site-select').on('change', function () {
 		applySite($(this).val());
 		loadSiteDependentDates();
@@ -209,6 +368,66 @@ document.addEventListener('DOMContentLoaded', function () {
 	// separately via the shared change listener below).
 	$(document).on('change', 'input.type-id', function () {
 		refreshParkingTypeOptions(currentSite());
+	});
+
+	// Step wizard: purely a client-side progressive-disclosure layer over the single
+	// #reservation form - every field from every step is still rendered server-side on
+	// page load (see Form::step_fieldset() in form.php) and nothing is fetched/submitted
+	// per step. Next/Prev never block navigation - the real "Pay and validate" submit
+	// (see the invalidHandler on $("#reservation").validate({...}) above) is what
+	// actually enforces required fields now, and jumps back to whichever step holds the
+	// first invalid one, so gating Next on per-step completeness would just be a second,
+	// redundant blocker.
+	const TOTAL_STEPS = 3;
+	let currentStep = 1;
+	const stepFieldIds = {
+		1: ['destination', 'depart', 'retour', 'nb_pax'],
+		2: ['modele', 'immatriculation'],
+		3: ['nom', 'prenom', 'code_postal', 'mobile', 'email'],
+	};
+
+	// Shared by the invalidHandler above (client-side submit attempt) and the
+	// server-side-error recheck below - finds the first step holding a field the
+	// validator considers invalid and shows it, so the error label form.js renders is
+	// never left stranded behind a hidden step.
+	function jumpToFirstInvalidStep(validator) {
+		for (let n = 1; n <= TOTAL_STEPS; n++) {
+			const hasInvalid = (stepFieldIds[n] || []).some(function (id) {
+				const el = document.getElementById(id);
+				return el && !validator.element('#' + id);
+			});
+			if (hasInvalid) {
+				showStep(n);
+				return;
+			}
+		}
+		showStep(1);
+	}
+
+	function showStep(n) {
+		$('.pkmgmt-step').each(function () {
+			const $step = $(this);
+			const isActive = parseInt($step.data('step'), 10) === n;
+			$step.toggleClass('pkmgmt-step-hidden', !isActive);
+			$step.attr('aria-hidden', isActive ? 'false' : 'true');
+		});
+		$('.pkmgmt-progress-step').each(function () {
+			const $item = $(this);
+			const stepNum = parseInt($item.data('step'), 10);
+			$item.attr('aria-current', stepNum === n ? 'step' : 'false');
+			$item.toggleClass('pkmgmt-progress-step-done', stepNum < n);
+		});
+		const $heading = $('#pkmgmt-step-' + n + '-heading');
+		$('#pkmgmt-step-announcer').text('Step ' + n + ' of ' + TOTAL_STEPS + ': ' + $heading.text());
+		$heading.trigger('focus');
+		currentStep = n;
+	}
+
+	$(document).on('click', '.pkmgmt-step-next', function () {
+		showStep(Math.min(currentStep + 1, TOTAL_STEPS));
+	});
+	$(document).on('click', '.pkmgmt-step-prev', function () {
+		showStep(Math.max(currentStep - 1, 1));
 	});
 
 	// Date picker
@@ -223,7 +442,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			url: '/wp-json/pkmgmt/v1/high-season',
 			data: {site_id: siteId},
 			dataType: 'json',
-			async: false,
 			error: function (e, f, g) {
 				console.error("get high season failed", f);
 			},
@@ -247,7 +465,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			url: '/wp-json/pkmgmt/v1/booked',
 			data: {site_id: siteId},
 			dataType: 'json',
-			async: false,
 			error: function (e, f, g) {
 				console.error("get booked failed", f);
 			},
@@ -272,6 +489,12 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	function easepickCreate(startDateInput, endDateInput, calendars, callback) {
+		// easepick's TimePlugin has no "default time" option of its own - left alone it
+		// defaults to midnight for a freshly-picked date. Seed it to noon instead, but
+		// only when the field doesn't already hold a value, so a date pre-filled from a
+		// home-form redirect or a server-side error re-render keeps its real time.
+		const hasStartValue = !!(startDateInput && startDateInput.value);
+		const hasEndValue = !!(endDateInput && endDateInput.value);
 		new easepick.create({
 			element: startDateInput,
 			lang: 'fr-FR',
@@ -289,6 +512,8 @@ document.addEventListener('DOMContentLoaded', function () {
 			format: 'YYYY-MM-DD HH:mm',
 			zIndex: 50,
 			setup(picker) {
+				if (!hasStartValue) picker.setStartTime('12:00');
+				if (!hasEndValue) picker.setEndTime('12:00');
 				picker.on('select', () => {
 					callback();
 				});
@@ -333,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				2,
 				function () {
 					getPrice();
-					if (external_object.form_options.dialog_confirmation === '1') {
+					if (dialogConfirmationEnabled()) {
 						syncValues('#depart', '#depart2');
 						syncValues('#retour', '#retour2');
 					}
@@ -401,116 +626,52 @@ document.addEventListener('DOMContentLoaded', function () {
 	$('#mobile').on('change', function () {
 		$('#tel_port').val(iti.getNumber());
 	})
-	// Confirmation dialog
+	// Confirmation dialog - #dialog_booking_confirmation is always rendered now (see
+	// Form::dialog_booking_confirmation()), so this setup always runs; dialogConfirmationEnabled()
+	// (checked at the two places that decide whether to actually open it) is what makes this a
+	// no-op for sites that don't use it. jQuery UI's dialog() starts with autoOpen:false, so
+	// initializing it unconditionally is harmless either way.
 	let dialogConfirm;
-	if (external_object.form_options.dialog_confirmation === '1') {
 
-		$('#email').on('change', function () {
-			$('#email2').val(this.value);
-		})
-		$('#email2').on('change', function () {
-			$('#email').val(this.value);
-		})
-		dialogConfirm = $('#dialog_booking_confirmation').dialog({
-			autoOpen: false,
-			height: 530,
-			width: 380,
-			modal: true
-		});
-		$('#confirmation').validate({
-			submitHandler: function (form) {
-				$('#spinner-container').css('display', 'flex');
-				$.each($('#reservation').serializeArray(), function (i, field) {
-					$('<input>').attr({
-						type: 'hidden',
-						name: field.name,
-						value: field.value
-					}).appendTo(form);
-				})
-				form.submit();
-			}
-		})
-	}
-
-	// Validation
-	$.validator.addMethod(
-		"customMobile",
-		function () {
-			return !!iti.isValidNumber();
-		},
-		"Vérifiez le numéro de téléphone"
-	);
-
-	if (external_object.locale === 'fr_FR')
-		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_fr.min.js");
-	if (external_object.locale === 'de_DE')
-		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_de.min.js");
-	if (external_object.locale === 'nl_NL')
-		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_nl.min.js");
-	$("#reservation").validate({
-		rules: {
-			nom: {
-				minlength: 2,
-				required: true
-			},
-			prenom: {
-				minlength: 2,
-				required: true
-			},
-			code_postal: {
-				digits: true,
-				required: true
-			},
-			mobile: {
-				customMobile: true,
-				required: true
-			},
-			email: {
-				required: true,
-				email: true
-			},
-			modele: {
-				required: true,
-				minlength: 2
-			},
-			immatriculation: {
-				required: true,
-				minlength: 2
-			},
-			destination: {
-				required: true,
-				minlength: 2
-			},
-			depart: {
-				required: true,
-			},
-			retour: {
-				required: true,
-			},
-			np_pax: {
-				required: true,
-			}
-		},
-
+	$('#email').on('change', function () {
+		$('#email2').val(this.value);
+	})
+	$('#email2').on('change', function () {
+		$('#email').val(this.value);
+	})
+	dialogConfirm = $('#dialog_booking_confirmation').dialog({
+		autoOpen: false,
+		// Height is left to the content (fixed 530px previously clipped/left dead space
+		// depending on content) - form.css caps width responsively on narrow viewports.
+		width: 420,
+		modal: true,
+		classes: {
+			'ui-dialog': 'pkmgmt-dialog',
+			'ui-dialog-titlebar': 'pkmgmt-dialog-titlebar',
+			'ui-dialog-titlebar-close': 'pkmgmt-dialog-close',
+		}
+	});
+	$('#confirmation').validate({
 		submitHandler: function (form) {
-			if (external_object.form_options.dialog_confirmation === '1') {
-				easepickCreate(
-					$('#depart2').get(0),
-					$('#retour2').get(0),
-					1,
-					function () {
-						syncValues('#depart2', '#depart');
-						syncValues('#retour2', '#retour');
-						getPrice();
-					}
-				);
-				dialogConfirm.dialog("open");
-			} else {
-				$('#spinner-container').css('display', 'flex');
-				form.submit();
-			}
+			showSpinner();
+			$.each($('#reservation').serializeArray(), function (i, field) {
+				$('<input>').attr({
+					type: 'hidden',
+					name: field.name,
+					value: field.value
+				}).appendTo(form);
+			})
+			form.submit();
 		}
 	})
+
+	// After a server-side validation error (e.g. Member::create()'s required-field
+	// check), the page re-renders fully populated from the submitted values with an
+	// error banner on top - don't strand the visitor on Step 1 if the actual invalid
+	// field lives on a later step.
+	if ($('.alert-danger').length) {
+		jumpToFirstInvalidStep($('#reservation').validate());
+	}
 });
 
 // Widget auto completion

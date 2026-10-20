@@ -63,4 +63,22 @@ class Terminal
 			array('value' => 'roissy', 'label' => 'Roissy'),
 		);
 	}
+
+	/**
+	 * Returns every known legacy parking "site" identity - i.e. which row of the legacy
+	 * tbl_remplissage/tbl_commande grid (Airport::value, aka parking_id there) this plugin's
+	 * site actually corresponds to. Deliberately separate from airportOptions(): a single
+	 * physical airport can host more than one legally distinct parking business (e.g. Orly
+	 * also hosts "CoverPark", Airport::ORLY2) - picking the airport alone isn't enough to
+	 * tell those apart, see Order::resolveLegacySiteID().
+	 */
+	public static function legacySiteOptions(): array
+	{
+		return array(
+			array('value' => (string)Airport::ORLY->value, 'label' => 'Orly'),
+			array('value' => (string)Airport::ROISSY->value, 'label' => 'Roissy'),
+			array('value' => (string)Airport::ORLY2->value, 'label' => 'Orly - CoverPark'),
+			array('value' => (string)Airport::ORLY3->value, 'label' => 'Orly - Site 4'),
+		);
+	}
 }

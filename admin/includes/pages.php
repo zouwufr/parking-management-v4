@@ -268,7 +268,7 @@ class Pages
 		);
 	}
 
-	private static function _field_select($id, $div_class, $name, $label_content, $options, $value): string
+	private static function _field_select($id, $div_class, $name, $label_content, $options, $value, string $select_class = ''): string
 	{
 		if (!is_array($options)) {
 			return Html::_div(array('class' => $div_class), "bad values type");
@@ -277,7 +277,7 @@ class Pages
 		return Html::_div(array('class' => $div_class),
 			Html::_label($id, $label_content),
 			'<br/>',
-			Html::_select($id, $name, array(), $options, $value)
+			Html::_select($id, $name, $select_class !== '' ? array('class' => $select_class) : array(), $options, $value)
 		);
 	}
 
@@ -710,18 +710,32 @@ class Pages
 
 		$contents = [];
 		$contents[] = '<div class="row">';
-		$contents[] = '<div class="col-sm-4">';
-		$contents[] = self::_field_select("site-$id-airport", 'location_field airport-select', "{$name}[airport]", esc_html__('Airport', 'parking-management'), Terminal::airportOptions(), $airportKey);
+		$contents[] = '<div class="col-sm-3">';
+		// admin.js's "Load from DB" handler reads this site's airport via `.find('.airport-select').val()`,
+		// which only works if the <select> itself carries the class - _field_select() otherwise puts
+		// $div_class on the wrapping <div>, leaving the <select> classless (unlike newSiteMarkup()'s
+		// JS-generated template, which already puts `class="airport-select"` directly on its <select>).
+		// That mismatch made .val() resolve to undefined for every existing (server-rendered) site,
+		// silently no-op'ing the click handler's `if (!airport) return;` guard.
+		$contents[] = self::_field_select("site-$id-airport", 'location_field', "{$name}[airport]", esc_html__('Airport', 'parking-management'), Terminal::airportOptions(), $airportKey, 'airport-select');
 		$contents[] = '</div>';
-		$contents[] = '<div class="col-sm-4 terminal-container">';
+		$contents[] = '<div class="col-sm-3 terminal-container">';
 		$contents[] = self::_field_select("site-$id-terminal", 'location_field', "{$name}[terminal]", esc_html__('Terminal', 'parking-management'), $terminalOptions, $site['terminal'] ?? ($terminalOptions[0]['value'] ?? ''));
 		$contents[] = '</div>';
-		$contents[] = '<div class="col-sm-4">';
+		$contents[] = '<div class="col-sm-3">';
 		$contents[] = self::_field_checkbox("site-$id-vehicle-type", 'location_field', "{$name}[vehicle_types]", esc_html__('Vehicle types', 'parking-management'), [
 			'car' => $vehicle_types['car'] ?? '0',
 			'motorcycle' => $vehicle_types['motorcycle'] ?? '0',
 			'truck' => $vehicle_types['truck'] ?? '0',
 		]);
+		$contents[] = '</div>';
+		$contents[] = '<div class="col-sm-3">';
+		// Separate from "Airport" above: more than one legally distinct parking business can
+		// share a physical airport (e.g. Orly also hosts "CoverPark"), so the airport alone
+		// isn't enough to resolve which legacy tbl_remplissage/tbl_commande row is this site's
+		// own - see Order::resolveLegacySiteID(). Defaults to the airport's own legacy id so
+		// existing single-business-per-airport sites behave exactly as before.
+		$contents[] = self::_field_select("site-$id-legacy-site", 'location_field', "{$name}[legacy_site_id]", esc_html__('Legacy site (DB)', 'parking-management'), Terminal::legacySiteOptions(), $site['legacy_site_id'] ?? (string)$airport->value, 'legacy-site-select');
 		$contents[] = '</div>';
 		$contents[] = '</div>';
 		$contents[] = '<div class="row">';
