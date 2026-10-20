@@ -610,12 +610,16 @@ function pkmgmt_migrate_to_4_11_0(): void
 /**
  * Pre-5.0 installs kept one global config split across the `info` (terminal/
  * vehicle_type/type), `form`, `booked_dates`, `high_season`, `notification` and
- * `booking`/`valet` properties. 5.0 replaces all of that with one or more
- * independent "sites" (a site now owns its own terminal, tariffs, form options,
- * booked dates, high season, notification and payment config, and mail/SMS
- * templates - see Template::site_item()). This folds whatever was already
- * configured into a single site, so an existing install keeps working
- * immediately after the upgrade with zero manual reconfiguration.
+ * `booking`/`valet` properties - `booking` and `valet` were two independent
+ * "kinds" (own validation page, payment config incl. provider success/cancel
+ * pages, mail/SMS templates - see pkmgmt_migrate_3_7_to_4_0()), not a single
+ * combined config. 5.0 replaces both kinds with one or more independent
+ * "sites" (see Template::site_item()). This folds each kind that had real
+ * config into its own site (so an install using only `booking`, only `valet`,
+ * or both, keeps working immediately after the upgrade with zero manual
+ * reconfiguration) rather than collapsing them into one, which would silently
+ * discard whichever kind lost that merge - `pkmgmt_valet` is unconditionally
+ * deleted at the end either way, so any config left out here is unrecoverable.
  *
  * The `properties_available` list no longer includes the legacy properties, so
  * $pm->prop(...) cannot see them any more - this reads the raw post meta directly.
@@ -638,6 +642,8 @@ function pkmgmt_migrate_to_5_0_0(): void
 		$legacy_form = is_array($legacy_form) ? $legacy_form : [];
 		$legacy_booking = get_post_meta($post_id, 'pkmgmt_booking', true);
 		$legacy_booking = is_array($legacy_booking) ? $legacy_booking : [];
+		$legacy_valet = get_post_meta($post_id, 'pkmgmt_valet', true);
+		$legacy_valet = is_array($legacy_valet) ? $legacy_valet : [];
 		$legacy_notification = get_post_meta($post_id, 'pkmgmt_notification', true);
 		$legacy_notification = is_array($legacy_notification) ? $legacy_notification : [];
 		$legacy_booked_dates = get_post_meta($post_id, 'pkmgmt_booked_dates', true);
@@ -645,64 +651,92 @@ function pkmgmt_migrate_to_5_0_0(): void
 		$legacy_high_season = get_post_meta($post_id, 'pkmgmt_high_season', true);
 		$legacy_high_season = is_array($legacy_high_season) ? $legacy_high_season : [];
 
-		if (empty($legacy_info) && empty($legacy_form) && empty($legacy_booking)) {
+		if (empty($legacy_info) && empty($legacy_form) && empty($legacy_booking) && empty($legacy_valet)) {
 			return; // fresh install, nothing to carry over
 		}
 
-		$site = Template::site_item();
-		$site['name'] = $pm->title ?: 'Site 1';
-		$site['active'] = '1';
-		$site['info']['address'] = $legacy_info['address'] ?? '';
-		$site['info']['mobile'] = $legacy_info['mobile'] ?? '';
-		$site['info']['RCS'] = $legacy_info['RCS'] ?? '';
-		$site['info']['email'] = $legacy_info['email'] ?? '';
+		// Builds one site from the shared location config (info/form/booked_dates/
+		// high_season, common to both kinds) plus one kind's own config
+		// (validation page, terms/dialog, payment, mail/SMS templates).
+		// $notification_mail overrides the shared pkmgmt_notification.mail block -
+		// needed for valet, which historically kept its own mail login/sender under
+		// pkmgmt_notification.valet instead (see pkmgmt_migrate_3_6_to_3_7()).
+		$build_site = function (string $name, array $legacy_kind, ?array $notification_mail = null) use ($legacy_info, $legacy_form, $legacy_notification, $legacy_booked_dates, $legacy_high_season): array {
+			$site = Template::site_item();
+			$site['name'] = $name;
+			$site['active'] = '1';
+			$site['info']['address'] = $legacy_info['address'] ?? '';
+			$site['info']['mobile'] = $legacy_info['mobile'] ?? '';
+			$site['info']['RCS'] = $legacy_info['RCS'] ?? '';
+			$site['info']['email'] = $legacy_info['email'] ?? '';
 
-		if (!empty($legacy_info['type']) && is_array($legacy_info['type'])) {
-			$site['type'] = wp_parse_args($legacy_info['type'], $site['type']);
-		}
-		if (!empty($legacy_info['terminal'])) {
-			$airport = strtolower($legacy_info['terminal']);
-			$site['airport'] = in_array($airport, ['orly', 'roissy', 'orly2', 'orly3'], true) ? $airport : 'orly';
-		}
-		if (!empty($legacy_info['vehicle_type']) && is_array($legacy_info['vehicle_type'])) {
-			$site['vehicle_types'] = wp_parse_args($legacy_info['vehicle_type'], $site['vehicle_types']);
-		}
-
-		if (!empty($legacy_form)) {
-			$site['form']['indicative'] = $legacy_form['indicative'] ?? $site['form']['indicative'];
-			$site['form']['booking_page'] = $legacy_form['booking_page'] ?? $site['form']['booking_page'];
-			if (!empty($legacy_form['options']) && is_array($legacy_form['options'])) {
-				$site['form']['options'] = wp_parse_args($legacy_form['options'], $site['form']['options']);
+			if (!empty($legacy_info['type']) && is_array($legacy_info['type'])) {
+				$site['type'] = wp_parse_args($legacy_info['type'], $site['type']);
 			}
-		}
+			if (!empty($legacy_info['terminal'])) {
+				$airport = strtolower($legacy_info['terminal']);
+				$site['airport'] = in_array($airport, ['orly', 'roissy', 'orly2', 'orly3'], true) ? $airport : 'orly';
+			}
+			if (!empty($legacy_info['vehicle_type']) && is_array($legacy_info['vehicle_type'])) {
+				$site['vehicle_types'] = wp_parse_args($legacy_info['vehicle_type'], $site['vehicle_types']);
+			}
 
+			if (!empty($legacy_form)) {
+				$site['form']['indicative'] = $legacy_form['indicative'] ?? $site['form']['indicative'];
+				$site['form']['booking_page'] = $legacy_form['booking_page'] ?? $site['form']['booking_page'];
+				if (!empty($legacy_form['options']) && is_array($legacy_form['options'])) {
+					$site['form']['options'] = wp_parse_args($legacy_form['options'], $site['form']['options']);
+				}
+			}
+
+			if (!empty($legacy_kind)) {
+				$site['form']['validation_page'] = $legacy_kind['validation_page'] ?? $site['form']['validation_page'];
+				$site['form']['terms_and_conditions'] = $legacy_kind['options']['terms_and_conditions'] ?? $site['form']['terms_and_conditions'];
+				$site['form']['dialog_confirmation'] = $legacy_kind['options']['dialog_confirmation'] ?? $site['form']['dialog_confirmation'];
+				if (!empty($legacy_kind['payment']) && is_array($legacy_kind['payment'])) {
+					$site['payment'] = wp_parse_args($legacy_kind['payment'], $site['payment']);
+				}
+				$site['mail_templates'] = $legacy_kind['mail_templates'] ?? $site['mail_templates'];
+				$site['sms_template'] = $legacy_kind['sms_template'] ?? '';
+			}
+
+			$site['booked_dates'] = $legacy_booked_dates;
+			if (!empty($legacy_high_season)) {
+				$site['high_season'] = wp_parse_args($legacy_high_season, $site['high_season']);
+			}
+			if (!empty($legacy_notification)) {
+				$site['notification']['mail'] = $notification_mail ?? $legacy_notification['mail'] ?? $site['notification']['mail'];
+				$site['notification']['sms'] = $legacy_notification['sms'] ?? $site['notification']['sms'];
+			}
+
+			return $site;
+		};
+
+		$title = $pm->title ?: 'Site';
+		$sites = [];
 		if (!empty($legacy_booking)) {
-			$site['form']['validation_page'] = $legacy_booking['validation_page'] ?? $site['form']['validation_page'];
-			$site['form']['terms_and_conditions'] = $legacy_booking['options']['terms_and_conditions'] ?? $site['form']['terms_and_conditions'];
-			$site['form']['dialog_confirmation'] = $legacy_booking['options']['dialog_confirmation'] ?? $site['form']['dialog_confirmation'];
-			if (!empty($legacy_booking['payment']) && is_array($legacy_booking['payment'])) {
-				$site['payment'] = wp_parse_args($legacy_booking['payment'], $site['payment']);
-			}
-			$site['mail_templates'] = $legacy_booking['mail_templates'] ?? $site['mail_templates'];
-			$site['sms_template'] = $legacy_booking['sms_template'] ?? '';
+			$sites[] = $build_site($title, $legacy_booking);
 		}
-
-		$site['booked_dates'] = $legacy_booked_dates;
-		if (!empty($legacy_high_season)) {
-			$site['high_season'] = wp_parse_args($legacy_high_season, $site['high_season']);
+		if (!empty($legacy_valet)) {
+			$valet_mail = (!empty($legacy_notification['valet']) && is_array($legacy_notification['valet']))
+				? $legacy_notification['valet']
+				: null;
+			$sites[] = $build_site(empty($sites) ? $title : $title . ' - Valet', $legacy_valet, $valet_mail);
 		}
-		if (!empty($legacy_notification)) {
-			$site['notification']['mail'] = $legacy_notification['mail'] ?? $site['notification']['mail'];
-			$site['notification']['sms'] = $legacy_notification['sms'] ?? $site['notification']['sms'];
+		if (empty($sites)) {
+			return; // neither kind had real config - nothing to carry over
 		}
 
 		$database = Template::get_default('database');
-		if (!empty($legacy_booking['database']) && array_filter($legacy_booking['database'])) {
-			$database = $legacy_booking['database'];
+		foreach ([$legacy_booking, $legacy_valet] as $legacy_kind) {
+			if (!empty($legacy_kind['database']) && array_filter($legacy_kind['database'])) {
+				$database = $legacy_kind['database'];
+				break;
+			}
 		}
 
 		$props = $pm->get_properties();
-		$props['sites'] = [1 => $site];
+		$props['sites'] = array_combine(range(1, count($sites)), $sites);
 		$props['database'] = $database;
 		$props['info'] = [
 			'logs' => $legacy_info['logs'] ?? ['database' => '0', 'file' => '1', 'retention' => '30'],
