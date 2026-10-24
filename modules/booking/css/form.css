@@ -640,13 +640,38 @@ form#reservation .total span {
 	color: #fff;
 	background-color: var(--pkmgmt-primary);
 	padding: 4px 10px;
+	/* Now that .ui-autocomplete scrolls internally (see below), pin each category
+	** header while its group scrolls past so position within a long, grouped list
+	** stays legible instead of requiring a scroll back up to see which country
+	** the currently-visible rows belong to. */
+	position: sticky;
+	top: 0;
+	z-index: 1;
 }
 
+/* jQuery UI's autocomplete menu has no built-in height/width cap - on mobile this let
+** a long result list (e.g. typing "par" into Destination matches 100+ airports/cities
+** across several countries) render as an unbounded popup several screens tall with no
+** scroll container, burying the rest of the form and the keyboard-dismiss affordance
+** below it. Cap it to a scrollable box and keep it inside the viewport horizontally,
+** same max-width pattern as .pkmgmt-dialog above. overflow-x stays hidden (not the
+** shorthand `overflow: hidden`) so the rounded corners still clip the category-header
+** backgrounds while overflow-y can scroll. */
 .ui-autocomplete {
 	border: 1px solid var(--pkmgmt-border);
 	border-radius: var(--pkmgmt-radius-sm);
 	box-shadow: var(--pkmgmt-shadow);
-	overflow: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	max-height: 320px;
+	max-width: calc(100vw - 2rem);
+}
+
+@media (max-width: 480px) {
+	.ui-autocomplete {
+		max-height: 45vh;
+	}
 }
 
 /*
@@ -739,6 +764,29 @@ label.error {
 	}
 	#reservation .hyphen {
 		display: none;
+	}
+
+	/* The terminal-departure/terminal-return selects sit in two Bootstrap .col's that
+	** split the row evenly - fine at desktop width, but under ~480px that squeezes each
+	** label ("Terminal departure"/"Terminal return") into a cramped column where it wraps
+	** to two lines and the select itself has barely any room. Stack them full-width like
+	** div.journey above instead - as plain block boxes rather than a column-direction flex
+	** row: .pkmgmt-terminal-row is itself nested inside .pkmgmt-trip-box, another flex
+	** row, which stretches its height to match its tallest sibling; combined with
+	** flex-direction:column that stretched height became a height *constraint*, and
+	** Bootstrap's .row flex-wrap:wrap (never unset here) wrapped the second .col into a
+	** second column instead of letting it drop below the first. Block layout has no
+	** cross-axis/wrap interaction to fight, so it can't regress the same way. */
+	#reservation .pkmgmt-terminal-row {
+		display: block;
+	}
+	#reservation .pkmgmt-terminal-row > .col {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+	}
+	#reservation .pkmgmt-terminal-row > .col + .col {
+		margin-top: .75rem;
 	}
 }
 

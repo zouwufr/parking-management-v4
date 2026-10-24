@@ -586,7 +586,7 @@ class Form
 			),
 			self::_row_field('',
 				Html::_div(
-					array('class' => 'row border mx-2 pb-3'),
+					array('class' => 'row border mx-2 pb-3 pkmgmt-trip-box'),
 					Html::_div(
 						array(
 							'class' => 'row d-none d-md-flex',
@@ -605,7 +605,7 @@ class Form
 						),
 					),
 					Html::_div(
-						array('class' => 'row'),
+						array('class' => 'row pkmgmt-terminal-row'),
 						Html::_div(
 							array('class' => 'col',),
 							Html::_label_with_attr(
