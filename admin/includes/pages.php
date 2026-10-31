@@ -660,6 +660,9 @@ class Pages
 
 		$header = '<div class="d-flex justify-content-between align-items-start mb-2">'
 			. self::_field("site-$id-name", 'location_field flex-grow-1 me-3', "{$name}[name]", esc_html__('Name', 'parking-management'), $site['name'] ?? '')
+			. '<span class="site-id-badge text-muted small me-3" title="'
+			. esc_attr__('Use this id in the booking page URL, e.g. ?site_id=' . $id, 'parking-management')
+			. '">' . esc_html__('ID', 'parking-management') . ': <code>' . esc_html($id) . '</code></span>'
 			. Html::_switch("site-$id-active", "{$name}[active]", [], esc_html__('Active', 'parking-management'), $site['active'] ?? '1')
 			. '<i class="fas fa-trash delete-site ms-3" title="' . esc_attr__('Remove', 'parking-management') . '"></i>'
 			. '</div>';
