@@ -486,6 +486,18 @@ class Pages
 		echo self::_fieldset('Database', ...$contents);
 	}
 
+	public static function supabase_box($supabase, $box): void
+	{
+		$fieldPrefix = 'pkmgmt-supabase';
+		$contents = [];
+		$contents[] = '<p class="description">' . esc_html__('Every new reservation is also written here (best-effort, in addition to the database above, which stays the source of truth) - a failed or skipped Supabase write never blocks a booking. Set each site\'s Supabase site id on its Info tab below to enable this for that site.', 'parking-management') . '</p>';
+		$contents[] = '<div class="' . $box['id'] . '-fields">';
+		$contents[] = self::_field($fieldPrefix . '-url', 'database_field', "{$fieldPrefix}[url]", esc_html__('Project URL', 'parking-management'), $supabase['url'] ?? '');
+		$contents[] = self::_field_password($fieldPrefix . '-key', 'database_field', "{$fieldPrefix}[key]", esc_html__('API key', 'parking-management'), $supabase['key'] ?? '');
+		$contents[] = '</div>';
+		echo self::_fieldset('Supabase', ...$contents);
+	}
+
 	private static function payment($id, $payment, $name): void
 	{
 		$payment_name = $payment['name'] ?? 'payplug';
@@ -776,6 +788,11 @@ class Pages
 		$companyFields[] = '</div>';
 		$companyFields[] = '</div>';
 		$contents[] = self::_fieldset(esc_html__('Company (this site\'s legal identity)', 'parking-management'), ...$companyFields);
+
+		$supabaseFields = [];
+		$supabaseFields[] = '<p class="description">' . esc_html__('The id of this location\'s row in Supabase\'s sites table (see the global Supabase settings). Leave empty to skip mirroring this site\'s reservations to Supabase.', 'parking-management') . '</p>';
+		$supabaseFields[] = self::_field("site-$id-supabase-site-id", 'location_field', "{$name}[supabase_site_id]", esc_html__('Supabase site id', 'parking-management'), $site['supabase_site_id'] ?? '');
+		$contents[] = self::_fieldset(esc_html__('Supabase sync', 'parking-management'), ...$supabaseFields);
 
 		return implode(PHP_EOL, $contents);
 	}

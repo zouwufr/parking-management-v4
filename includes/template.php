@@ -10,6 +10,7 @@ class Template
 			'info' => $template = self::info(),
 			'database' => $template = self::database(),
 			'sites' => $template = self::sites(),
+			'supabase' => $template = self::supabase(),
 			default => $template = null
 		};
 		return apply_filters('pkmgmt_default_template', $template, $prop);
@@ -34,6 +35,18 @@ class Template
 			'port' => "",
 			'user' => "",
 			'password' => ""
+		);
+	}
+
+	/**
+	 * Global Supabase project config - reservations are mirrored here (best-effort,
+	 * never blocking) alongside the legacy MySQL write. See Booking\SupabaseSync.
+	 */
+	private static function supabase(): array
+	{
+		return array(
+			'url' => "",
+			'key' => "",
 		);
 	}
 

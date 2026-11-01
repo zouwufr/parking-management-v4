@@ -14,6 +14,7 @@ class ParkingManagement
 		'info' => ['title' => 'Information'],
 		'database' => ['title' => 'Database'],
 		'sites' => ['title' => 'Sites'],
+		'supabase' => ['title' => 'Supabase'],
 	];
 	private static ParkingManagement|null $current = null;
 

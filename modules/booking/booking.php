@@ -7,6 +7,7 @@ use Booking\HomeForm;
 use Booking\Member;
 use Booking\Order;
 use Booking\Site;
+use Booking\SupabaseSync;
 use Booking\Vehicle;
 use Exception;
 use ParkingManagement\interfaces\IParkingmanagement;
@@ -24,6 +25,8 @@ require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS .
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "member.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "order.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "vehicle.php";
+require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "supabase_client.php";
+require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "booking" . DS . "includes" . DS . "supabase_sync.php";
 
 class Booking implements IShortcode, IParkingManagement
 {
@@ -124,6 +127,9 @@ class Booking implements IShortcode, IParkingManagement
 			$vehicle->create($order_id);
 
 			$site = Site::current();
+			// Best-effort mirror to Supabase - never blocks or fails the booking itself,
+			// see SupabaseSync::pushOrder().
+			SupabaseSync::pushOrder($order_id, $site ?? []);
 
 			$payment = new Payment($this->pm);
 			$payment->setSite($site ?? []);
