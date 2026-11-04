@@ -549,6 +549,16 @@ class Form
 			return array();
 		}
 		$post = array_merge($_GET, $_POST);
+		$value = $post['site_id'] ?? $sites[0]['value'];
+		// A single active site has nothing to actually choose - showing a one-option
+		// select just adds a dropdown the customer has to look at and skip past.
+		// `site_id` still needs to reach Order/Vehicle/Price on submit, so it's posted
+		// as a hidden input instead. form.js's currentSiteId() already falls back to
+		// external_object.site_id when no `.site-select` is in the DOM, so nothing
+		// else needs to change here.
+		if (count($sites) === 1) {
+			return [Html::_index('hidden', 'site_id', 'site_id', array('value' => $value))];
+		}
 		return [
 			self::_row_field('site_id',
 				self::_label('site_id', esc_html__('Location', 'parking-management')),
@@ -557,7 +567,7 @@ class Form
 						'class' => 'site-select required border rounded py-2 px-3 form-select',
 					),
 					$sites,
-					$post['site_id'] ?? $sites[0]['value']
+					$value
 				)
 			),
 		];
