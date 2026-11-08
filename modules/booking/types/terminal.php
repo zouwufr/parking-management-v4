@@ -78,7 +78,7 @@ class Terminal
 			array('value' => (string)Airport::ORLY->value, 'label' => 'Orly'),
 			array('value' => (string)Airport::ROISSY->value, 'label' => 'Roissy'),
 			array('value' => (string)Airport::ORLY2->value, 'label' => 'Orly - CoverPark'),
-			array('value' => (string)Airport::ORLY3->value, 'label' => 'Orly - Site 4'),
+			array('value' => (string)Airport::ORLY3->value, 'label' => 'Orly - DuPont'),
 		);
 	}
 }
