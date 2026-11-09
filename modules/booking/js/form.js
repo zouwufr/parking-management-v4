@@ -361,7 +361,15 @@ document.addEventListener('DOMContentLoaded', function () {
 		applySite($(this).val());
 		loadSiteDependentDates();
 		getPrice();
-	}).trigger('change');
+	});
+	// Single-site deployments have no `.site-select` in the DOM (see
+	// Form::site_id_field()), so `.trigger('change')` on it never fired and the
+	// vehicle/parking-type filtering below never ran on page load - every option
+	// stayed visible regardless of what the site actually supports. Apply the
+	// current site's restrictions directly instead of relying on that element
+	// existing.
+	applySite(currentSiteId());
+	loadSiteDependentDates();
 
 	// Switching vehicle type can only ever narrow/widen the valet option; re-check
 	// parking_type alignment whenever it changes (getPrice() already re-fires
