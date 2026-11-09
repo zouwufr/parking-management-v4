@@ -344,9 +344,22 @@ form#reservation div.type-id div.radio {
 	text-align: center;
 }
 
+/* !important: the live theme's own global input reset otherwise beats this plain
+ * display:none for a plain input[type=radio] (no class-based rule here to out-specificity
+ * it with), showing the native radio bullet next to the pill label. */
 form#reservation div.radio input[type=radio] {
 	position: absolute;
-	display: none;
+	display: none !important;
+}
+
+/* The live theme draws its own generic radio/checkbox bullet via label::before
+ * (not from this plugin's CSS) on any label that follows an input - harmless for a
+ * plain checkbox/radio elsewhere on the site, but shows up as a stray dot next to
+ * these pill labels since the real input is hidden above. Suppress it only for this
+ * form's radio pills, not globally. */
+form#reservation div.radio label::before {
+	display: none !important;
+	content: none !important;
 }
 
 /* .radio wrappers carry Bootstrap's d-flex utility class, which is `display: flex
@@ -489,12 +502,16 @@ form#reservation fieldset.pkmgmt-step.pkmgmt-step-hidden {
 	}
 }
 
-form#reservation div.type-id label:hover {
+/* .radio, not .type-id: the vehicle-type group's outer wrapper is .type-id, but the
+ * parking-type group's (Form::parking_type_field()) is .parking_type - scoping on the
+ * .radio wrapper both groups actually share is what makes this (pill look, hover
+ * cursor/border) apply to both instead of only the vehicle-type pills. */
+form#reservation div.radio label:hover {
 	cursor: pointer;
 }
 
 
-form#reservation div.type-id div label {
+form#reservation div.radio label {
 	padding: 12px 24px;
 	margin-bottom: 10px;
 	margin-top: 10px;
@@ -508,7 +525,7 @@ form#reservation div.type-id div label {
 	transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
 
-form#reservation div.type-id div label:hover {
+form#reservation div.radio label:hover {
 	border-color: var(--pkmgmt-primary);
 }
 
