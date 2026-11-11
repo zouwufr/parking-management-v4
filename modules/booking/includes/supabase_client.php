@@ -32,16 +32,6 @@ class SupabaseClient
 	}
 
 	/**
-	 * Inserts a row and returns the inserted row (Prefer: return=representation).
-	 *
-	 * @throws Exception
-	 */
-	public function insert(string $table, array $row): mixed
-	{
-		return $this->request('POST', "/rest/v1/{$table}", $row);
-	}
-
-	/**
 	 * Selects rows from a table. $query is passed through as PostgREST query params,
 	 * e.g. ['site_id' => 'eq.<uuid>', 'select' => 'id', 'limit' => '1'].
 	 *
@@ -84,7 +74,7 @@ class SupabaseClient
 		$code = wp_remote_retrieve_response_code($response);
 		$raw = wp_remote_retrieve_body($response);
 		if ($code < 200 || $code >= 300) {
-			throw new Exception("Supabase request to {$path} returned HTTP {$code}: {$raw}");
+			throw new Exception("Supabase request to {$path} returned HTTP {$code}: {$raw}", (int)$code);
 		}
 
 		if ($raw === '') {

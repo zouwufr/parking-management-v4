@@ -2,6 +2,7 @@
 
 namespace Booking;
 
+use Exception;
 use ParkingManagement\database\database;
 use ParkingManagement\Logger;
 use Throwable;
@@ -52,18 +53,6 @@ class SupabaseSync
 		$client = new SupabaseClient($url, $key);
 
 		$reference_code = (string)($order['facture_id'] ?? ('PKMGMT-' . $order_id));
-		// Idempotent: a booking already mirrored for this order (live retry, or a
-		// migration script re-run after a partial failure) is left alone rather than
-		// duplicated.
-		$existing = $client->select('bookings', [
-			'reference_code' => 'eq.' . $reference_code,
-			'select' => 'id',
-			'limit' => '1',
-		]);
-		if (!empty($existing[0]['id'])) {
-			Logger::info('supabase_sync.push', ['order_id' => $order_id, 'supabase_booking_id' => $existing[0]['id'], 'message' => 'already mirrored, skipping']);
-			return;
-		}
 
 		$customer = $client->rpc('get_or_create_customer', [
 			'p_first_name' => ucwords((string)($member['prenom'] ?? '')),
@@ -126,8 +115,6 @@ class SupabaseSync
 			return;
 		}
 
-		$total_days = max(1, (int)($order['nb_jour'] ?? 1));
-		$total_price = (float)($order['total'] ?? 0);
 		$status = match ((int)($order['status'] ?? 0)) {
 			OrderStatus::PENDING->value => 'pending',
 			OrderStatus::PAID->value, OrderStatus::CONFIRMED->value => 'confirmed',
@@ -135,7 +122,10 @@ class SupabaseSync
 			default => 'pending',
 		};
 
-		$booking = $client->insert('bookings', [
+		// create_booking is SECURITY DEFINER: the anon/publishable key cannot insert into
+		// bookings or booking_options directly (RLS requires a company member). It also
+		// prices the booking from Supabase's own slot_type_prices grid, so no price is sent.
+		$payload = [
 			'reference_code' => $reference_code,
 			'site_id' => $supabase_site_id,
 			'slot_type_id' => $slot_type_id,
@@ -148,22 +138,31 @@ class SupabaseSync
 			'return_at' => $return_at->format(DATE_ATOM),
 			'departure_terminal' => $departure_terminal,
 			'return_terminal' => $return_terminal,
-			'base_price_per_day' => round($total_price / $total_days, 2),
-			'total_days' => $total_days,
-			'subtotal' => $total_price,
-			'total_price' => $total_price,
 			'currency' => 'EUR',
 			'status' => $status,
-		]);
-
-		$booking_id = is_array($booking) ? ($booking[0]['id'] ?? $booking['id'] ?? null) : null;
-		if (empty($booking_id)) {
-			Logger::error('supabase_sync.push', ['order_id' => $order_id, 'message' => 'bookings insert returned no id', 'response' => $booking]);
-			return;
-		}
+		];
 
 		if ($parking_type === 2) {
-			self::attachValetOption($client, $supabase_site_id, $booking_id, $order_id);
+			$valet_option_id = self::valetOptionId($client, $supabase_site_id, $order_id);
+			if ($valet_option_id !== null) {
+				$payload['options'] = [['site_option_id' => $valet_option_id, 'quantity' => 1]];
+			}
+		}
+
+		try {
+			$booking_id = $client->rpc('create_booking', ['payload' => $payload]);
+		} catch (Exception $e) {
+			// bookings.reference_code is unique: a retry of an already-mirrored order lands here.
+			if ($e->getCode() === 409) {
+				Logger::info('supabase_sync.push', ['order_id' => $order_id, 'reference_code' => $reference_code, 'message' => 'already mirrored, skipping']);
+				return;
+			}
+			throw $e;
+		}
+
+		if (!is_string($booking_id) || $booking_id === '') {
+			Logger::error('supabase_sync.push', ['order_id' => $order_id, 'message' => 'create_booking returned no id', 'response' => $booking_id]);
+			return;
 		}
 
 		Logger::info('supabase_sync.push', ['order_id' => $order_id, 'supabase_booking_id' => $booking_id, 'message' => 'mirrored to Supabase']);
@@ -171,34 +170,23 @@ class SupabaseSync
 
 	/**
 	 * Valet is a booking_options line item on the Supabase side, not a slot_category -
-	 * looked up by this project's own "valet" site_options.code convention per site
-	 * (see admin Supabase settings description).
+	 * looked up by this project's own "valet" site_options.code convention per site.
 	 */
-	private static function attachValetOption(SupabaseClient $client, string $supabase_site_id, string $booking_id, int $order_id): void
+	private static function valetOptionId(SupabaseClient $client, string $supabase_site_id, int $order_id): ?string
 	{
-		try {
-			$options = $client->select('site_options', [
-				'site_id' => 'eq.' . $supabase_site_id,
-				'code' => 'eq.valet',
-				'is_active' => 'eq.true',
-				'select' => 'id,name,price',
-				'limit' => '1',
-			]);
-			$option = $options[0] ?? null;
-			if (empty($option['id'])) {
-				Logger::info('supabase_sync.push', ['order_id' => $order_id, 'message' => "no 'valet' site_option provisioned for site {$supabase_site_id}, skipping option line"]);
-				return;
-			}
-			$client->insert('booking_options', [
-				'booking_id' => $booking_id,
-				'site_option_id' => $option['id'],
-				'option_name' => $option['name'] ?? 'Valet',
-				'price' => (float)($option['price'] ?? 0),
-				'quantity' => 1,
-			]);
-		} catch (Throwable $e) {
-			Logger::error('supabase_sync.attachValetOption', ['order_id' => $order_id, 'error' => $e->getMessage()]);
+		$options = $client->select('site_options', [
+			'site_id' => 'eq.' . $supabase_site_id,
+			'code' => 'eq.valet',
+			'is_active' => 'eq.true',
+			'select' => 'id',
+			'limit' => '1',
+		]);
+		$id = $options[0]['id'] ?? null;
+		if (empty($id)) {
+			Logger::info('supabase_sync.push', ['order_id' => $order_id, 'message' => "no 'valet' site_option provisioned for site {$supabase_site_id}, skipping option line"]);
+			return null;
 		}
+		return (string)$id;
 	}
 
 	private static function readVehicle(int $order_id): array
