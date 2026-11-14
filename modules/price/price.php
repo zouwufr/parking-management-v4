@@ -33,12 +33,12 @@ class Price implements IShortcode, IParkingmanagement
 	{
 		try {
 			$this->enqueue();
-			$site = Site::current();
-			if ($site === null) {
+			$sites = Site::activeOnly();
+			if (empty($sites)) {
 				return '';
 			}
 			$page = new Page($this->pm);
-			$page->setSite($site);
+			$page->setSites($sites);
 			return Html::_div(array('class' => 'container-md mt-5'),
 				$page->table(),
 			);

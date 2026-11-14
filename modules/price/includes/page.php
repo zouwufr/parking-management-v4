@@ -9,7 +9,7 @@ use ParkingManagement\ParkingManagement;
 class Page implements IParkingmanagement
 {
 
-	private array $site = [];
+	private array $sites = [];
 
 	private ParkingManagement $pm;
 
@@ -18,66 +18,132 @@ class Page implements IParkingmanagement
 		$this->pm = $pm;
 	}
 
-	public function setSite(array $site): void
+	public function setSites(array $sites): void
 	{
-		$this->site = $site;
+		$this->sites = $sites;
 	}
 
 	public function table(): string
 	{
-		$type = $this->site['type'] ?? [];
-		$enabledCount = (($type['ext'] ?? '0') === '1' ? 1 : 0) + (($type['int'] ?? '0') === '1' ? 1 : 0) + (($type['valet'] ?? '0') === '1' ? 1 : 0);
-		$div_class = $enabledCount > 1 ? 'col-md-6' : 'col';
 		return Html::_div(
 			array('class' => 'row'),
-			$this->elem($div_class, esc_html__('Outside lots', 'parking-management'), 'ext', ($type['ext'] ?? '0') === '1'),
-			$this->elem($div_class, esc_html__('Inside lots', 'parking-management'), 'int', ($type['int'] ?? '0') === '1'),
-			$this->elem($div_class, esc_html__('Valet', 'parking-management'), 'valet', ($type['valet'] ?? '0') === '1'),
-			$this->options($this->site['form']['options'] ?? [])
+			$this->elem($this->siteColumns()),
+			$this->allOptions(),
 		);
 	}
 
-	private function elem(string $div_class, string $title, string $parkingKey, bool $enabled): string
+	/**
+	 * Collects, across every active site and every parking type it offers, the
+	 * columns of the single comparison table - a site with several parking types
+	 * enabled gets one column per type, but today every site only ever enables one.
+	 */
+	private function siteColumns(): array
 	{
-		if (!$enabled)
-			return '';
-		$tariff = $this->site['tariffs']['car'][$parkingKey] ?? [];
-		if (empty($tariff))
-			return '';
-		$high_season = $this->site['high_season']['price'] ?? 0;
+		$parkingTypes = [
+			'ext' => esc_html__('Outside lots', 'parking-management'),
+			'int' => esc_html__('Inside lots', 'parking-management'),
+			'valet' => esc_html__('Valet', 'parking-management'),
+		];
 
-		$contents = array();
-		foreach ($tariff as $day => $price) {
-			if (!is_numeric($day) || empty($price)) {
-				continue;
+		$columns = [];
+		foreach ($this->sites as $site) {
+			foreach ($parkingTypes as $parkingKey => $typeLabel) {
+				if (($site['type'][$parkingKey] ?? '0') !== '1') {
+					continue;
+				}
+				$tariff = $site['tariffs']['car'][$parkingKey] ?? [];
+				if (empty($tariff)) {
+					continue;
+				}
+				$columns[] = [
+					'name' => $site['name'] ?? '',
+					'type' => $typeLabel,
+					'tariff' => $tariff,
+					'high_season' => $site['high_season']['price'] ?? 0,
+				];
 			}
-			$contents[] = '<tr><th class="align-middle text-center" scope="row">' . $day . '</th>';
-			$contents[] = '<td class="align-middle text-center">' . $price . '€' . '</td>';
-			if ($high_season)
-				$contents[] = '<td class="align-middle text-center">' . ($price + $high_season) . '€' . '</td>';
-			$contents[] = '</tr>';
 		}
-		return Html::_div(array('class' => $div_class),
+		return $columns;
+	}
+
+	private function elem(array $columns): string
+	{
+		if (empty($columns)) {
+			return '';
+		}
+
+		$days = [];
+		foreach ($columns as $column) {
+			foreach ($column['tariff'] as $day => $price) {
+				if (is_numeric($day) && !empty($price)) {
+					$days[(int)$day] = true;
+				}
+			}
+		}
+		ksort($days);
+		$days = array_keys($days);
+
+		$headerCells = ['<th class="align-middle text-center bg-primary col-1">' . esc_html__('Number of days', 'parking-management') . '</th>'];
+		foreach ($columns as $column) {
+			$headerCells[] = '<th class="align-middle text-center bg-primary">' . esc_html($column['name'])
+				. '<br><small class="fw-normal">' . esc_html($column['type']) . '</small>'
+				. ($column['high_season'] ? '<br><small class="fw-normal">' . sprintf(esc_html__('+%s€ high season', 'parking-management'), $column['high_season']) . '</small>' : '')
+				. '</th>';
+		}
+
+		$rows = [];
+		foreach ($days as $day) {
+			$cells = ['<th class="align-middle text-center" scope="row">' . $day . '</th>'];
+			foreach ($columns as $column) {
+				$price = $column['tariff'][$day] ?? null;
+				$cells[] = '<td class="align-middle text-center">' . (is_numeric($price) ? esc_html($price) . '€' : '—') . '</td>';
+			}
+			$rows[] = '<tr>' . implode(PHP_EOL, $cells) . '</tr>';
+		}
+
+		return Html::_div(array('class' => 'col'),
 			Html::_div(
 				array('class' => 'table-responsive'),
 				'<table class="table table-light table-hover table-striped align-middle text-center caption-top">',
-				'<caption>' . $title . '</caption>',
+				'<caption>' . esc_html__('Prices', 'parking-management') . '</caption>',
 				'<thead class="table-dark">',
 				'<tr>',
-				'<th class="align-middle text-center bg-primary col-1">' . esc_html__("Number of days", 'parking-management') . '</th>',
-				'<th class="align-middle text-center bg-primary">' . esc_html__("Price", "parking-management") . '</th>',
-				($high_season) ? '<th class="align-middle text-center bg-warning col-4">' . esc_html__("High Season Price", 'parking-management') . '</th>' : '',
+				implode(PHP_EOL, $headerCells),
 				'</tr>',
 				'</thead>',
 				'<tbody>',
-				implode(PHP_EOL, $contents),
+				implode(PHP_EOL, $rows),
 				'</tbody>',
 				'</table>',
 			),
 		);
 	}
 
-	private function options(array $options): string
+	private function allOptions(): string
+	{
+		$blocks = [];
+		foreach ($this->sites as $site) {
+			$list = $this->optionsList($site['form']['options'] ?? []);
+			if (empty($list)) {
+				continue;
+			}
+			$blocks[] = Html::_div(
+				array('class' => 'col-12 mt-4'),
+				'<h4>' . esc_html($site['name'] ?? '') . '</h4>',
+				Html::_ul(array('class' => 'list-group list-group-flush'), ...$list)
+			);
+		}
+		if (empty($blocks)) {
+			return '';
+		}
+		return Html::_div(
+			array('class' => 'col-12 mt-5'),
+			'<h3 class="option">' . esc_html__('Options price', 'parking-management') . '</h3>',
+			...$blocks
+		);
+	}
+
+	private function optionsList(array $options): array
 	{
 		$ul_contents = [];
 		if (($options['holiday']['enabled'] ?? '0') === '1') {
@@ -141,12 +207,6 @@ class Page implements IParkingmanagement
 			);
 		}
 
-		return Html::_div(
-			array('class' => 'col mt-5'),
-			'<h3 class="option">' . esc_html__("Options price", 'parking-management') . '</h3>',
-			Html::_ul(array('class' => 'list-group list-group-flush'),
-				...$ul_contents
-			)
-		);
+		return $ul_contents;
 	}
 }
