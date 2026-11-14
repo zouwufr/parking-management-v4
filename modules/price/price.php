@@ -387,7 +387,7 @@ class Price implements IShortcode, IParkingmanagement
 					continue;
 				}
 				$entry = [];
-				for ($day = 1; $day <= 10; $day++) {
+				for ($day = 1; $day <= 30; $day++) {
 					if (isset($days[$day]) && is_numeric($days[$day])) {
 						$entry[$day] = $days[$day];
 					}

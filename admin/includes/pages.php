@@ -815,7 +815,7 @@ class Pages
 				$contents[] = '<div class="tariff-vehicle mb-2" data-vehicle="' . esc_attr($vehicle) . '" data-parking-type="' . esc_attr($parkingKey) . '">';
 				$contents[] = '<strong>' . esc_html(ucfirst($vehicle)) . ' - ' . esc_html(strtoupper($parkingKey)) . '</strong>';
 				$contents[] = '<div class="row g-2 align-items-end">';
-				for ($day = 1; $day <= 10; $day++) {
+				for ($day = 1; $day <= 30; $day++) {
 					$contents[] = '<div class="col-auto">';
 					$contents[] = '<label class="form-label small mb-0">' . sprintf(esc_html__('%d day(s)', 'parking-management'), $day) . '</label>';
 					$contents[] = '<input type="number" step="0.01" class="form-control form-control-sm" data-day="' . esc_attr($day) . '" name="' . esc_attr("{$name}[tariffs][{$vehicle}][{$parkingKey}][{$day}]") . '" value="' . esc_attr($vehicleTariff[$day] ?? '') . '">';
