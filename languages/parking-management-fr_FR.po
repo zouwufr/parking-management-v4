@@ -523,3 +523,11 @@ msgstr "Lieu"
 #: modules/booking/includes/form.php:790
 msgid "Please double-check your dates and email before paying."
 msgstr "Merci de bien vérifier vos dates et votre email avant de payer."
+
+#: modules/price/includes/page.php:90
+msgid "+%s€ high season"
+msgstr "+%s€ haute saison"
+
+#: modules/price/includes/page.php:108
+msgid "Prices"
+msgstr "Tarifs"
