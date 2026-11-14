@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		return Object.keys(sitesConfig.vehicle_types).map(function (vehicle) {
 			return parkingTypesFor(vehicle).map(function (parkingType) {
 				let days = '';
-				for (let day = 1; day <= 10; day++) {
+				for (let day = 1; day <= 30; day++) {
 					days += `
 						<div class="col-auto">
 							<label class="form-label small mb-0">${day} day(s)</label>
@@ -143,16 +143,17 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// Price grid CSV export/import - one row per (vehicle, parking type), columns
-	// day_1..day_10 + extra_day. Pure client-side: export reads the current inputs,
+	// day_1..day_30 + extra_day. Pure client-side: export reads the current inputs,
 	// import fills them back in: nothing is sent to the server until Save is clicked.
 	function exportPriceCsv($siteItem) {
-		const rows = [['vehicle', 'parking_type', 'day_1', 'day_2', 'day_3', 'day_4', 'day_5', 'day_6', 'day_7', 'day_8', 'day_9', 'day_10', 'extra_day']];
+		const dayColumns = Array.from({length: 30}, (_, i) => `day_${i + 1}`);
+		const rows = [['vehicle', 'parking_type', ...dayColumns, 'extra_day']];
 		$siteItem.find('.tariff-vehicle').each(function () {
 			const $block = $(this);
 			const vehicle = $block.data('vehicle');
 			const parkingType = $block.data('parking-type');
 			const days = [];
-			for (let day = 1; day <= 10; day++) {
+			for (let day = 1; day <= 30; day++) {
 				days.push($block.find(`input[data-day="${day}"]`).val() || '');
 			}
 			const extraDay = $block.find('input[data-day="jour_supplementaire"]').val() || '';
@@ -196,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		const lines = text.split(/\r?\n/).filter(line => line.trim().length);
 		if (!lines.length) return;
 		const header = lines[0].split(',').map(h => h.trim());
-		const dayColumns = header.slice(2, 12);
+		const dayColumns = header.slice(2, 32);
 		const tariffs = {};
 		lines.slice(1).forEach(function (line) {
 			const cells = line.split(',').map(c => c.trim());
