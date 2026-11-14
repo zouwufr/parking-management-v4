@@ -491,3 +491,35 @@ msgstr "Date début"
 #: modules/booking/includes/home_form.php:96
 msgid "End date"
 msgstr "Date fin"
+
+#: modules/booking/includes/form.php:434
+msgid "Location & Dates"
+msgstr "Lieu et dates"
+
+#: modules/booking/includes/form.php:435
+msgid "Vehicle & Parking"
+msgstr "Véhicule et parking"
+
+#: modules/booking/includes/form.php:436
+msgid "Your Details"
+msgstr "Vos informations"
+
+#: modules/booking/includes/form.php:421
+msgid "Back"
+msgstr "Précédent"
+
+#: modules/booking/includes/form.php:426
+msgid "Next"
+msgstr "Suivant"
+
+#: modules/booking/includes/form.php:451
+msgid "Booking steps"
+msgstr "Étapes de réservation"
+
+#: modules/booking/includes/form.php:564
+msgid "Location"
+msgstr "Lieu"
+
+#: modules/booking/includes/form.php:790
+msgid "Please double-check your dates and email before paying."
+msgstr "Merci de bien vérifier vos dates et votre email avant de payer."
