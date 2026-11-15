@@ -39,7 +39,7 @@
 	font-family: var(--pkmgmt-font);
 	color: var(--pkmgmt-primary) !important;
 	font-weight: 700 !important;
-	font-size: 1.5em !important;
+	font-size: 1.65em !important;
 	letter-spacing: -.01em;
 	margin-bottom: 15px;
 	margin-top: 15px;
@@ -53,7 +53,7 @@ form#reservation {
 form#reservation legend {
 	width: auto;
 	float: none;
-	font-size: 1.15rem;
+	font-size: 1.3rem;
 	font-weight: 700;
 	color: var(--pkmgmt-text);
 	padding: 0 0 0 .75rem;
@@ -371,141 +371,11 @@ form#reservation div.radio.pkmgmt-hidden {
 	display: none !important;
 }
 
-/* Same "beat Bootstrap's !important" rationale as .pkmgmt-hidden above - a step's
- * fieldset may itself use d-flex/d-grid utilities internally, so this hide rule is
- * scoped + !important rather than relying on a plain inline display:none. */
-form#reservation fieldset.pkmgmt-step.pkmgmt-step-hidden {
-	display: none !important;
-}
-
-/* --- Step wizard progress indicator + nav (mobile-first: base styles target narrow
- * screens, layered min-width queries add detail on larger ones - unlike the max-width
- * retrofits further down this file, this block is written mobile-first from the start).
- *
- * "Booking steps" design: connected numbered-circle stepper (vs. the earlier
- * underline-tabs look) - each step is a circle on a horizontal connecting line;
- * the active circle is filled solid, a completed circle (form.js toggles
- * .pkmgmt-progress-step-done once its step is passed) gets a checkmark and a
- * tinted line segment leading into it, so progress reads at a glance. */
-.pkmgmt-progress {
-	margin: 0 0 1.5rem;
-}
-.pkmgmt-progress ul {
-	list-style: none;
-	display: flex;
-	padding: 0;
-	margin: 0;
-}
-.pkmgmt-progress-step {
-	position: relative;
-	flex: 1 1 0;
-	text-align: center;
-	color: var(--pkmgmt-text-muted);
-}
-.pkmgmt-progress-step::before {
-	content: '';
-	position: absolute;
-	top: 15px;
-	left: -50%;
-	width: 100%;
-	height: 2px;
-	background: var(--pkmgmt-border);
-	z-index: 0;
-}
-.pkmgmt-progress-step:first-child::before {
-	content: none;
-}
-.pkmgmt-progress-number {
-	position: relative;
-	z-index: 1;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background: #fff;
-	border: 2px solid var(--pkmgmt-border);
-	color: var(--pkmgmt-text-muted);
-	font-size: .8rem;
-	font-weight: 700;
-	line-height: 1;
-}
-.pkmgmt-progress-label {
-	display: none;
-	margin-top: .4rem;
-	font-size: .7rem;
-}
-.pkmgmt-progress-step[aria-current="step"] {
-	color: var(--pkmgmt-primary);
-	font-weight: 700;
-}
-.pkmgmt-progress-step[aria-current="step"] .pkmgmt-progress-number {
-	border-color: var(--pkmgmt-primary);
-	background: var(--pkmgmt-primary);
-	color: #fff;
-	box-shadow: 0 0 0 4px var(--pkmgmt-primary-light);
-}
-.pkmgmt-progress-step.pkmgmt-progress-step-done {
-	color: var(--pkmgmt-primary);
-}
-.pkmgmt-progress-step.pkmgmt-progress-step-done::before {
-	background: var(--pkmgmt-primary);
-}
-.pkmgmt-progress-step.pkmgmt-progress-step-done .pkmgmt-progress-number {
-	border-color: var(--pkmgmt-primary);
-	background: var(--pkmgmt-primary-light);
-	color: var(--pkmgmt-primary);
-	font-size: 0;
-}
-.pkmgmt-progress-step.pkmgmt-progress-step-done .pkmgmt-progress-number::after {
-	content: '\2713';
-	font-size: .85rem;
-}
-
-@media (min-width: 576px) {
-	.pkmgmt-progress-label {
-		display: block;
-	}
-}
-@media (min-width: 768px) {
-	.pkmgmt-progress-number {
-		width: 34px;
-		height: 34px;
-		font-size: .9rem;
-	}
-	.pkmgmt-progress-step::before {
-		top: 17px;
-	}
-	.pkmgmt-progress-label {
-		font-size: .8rem;
-	}
-}
-
-.pkmgmt-step-actions {
-	display: flex;
-	flex-direction: column;
-	gap: .5rem;
-	margin-top: 1.25rem;
-}
-.pkmgmt-step-actions .btn {
-	width: 100%;
-}
-
-@media (min-width: 576px) {
-	.pkmgmt-step-actions {
-		flex-direction: row;
-		justify-content: space-between;
-	}
-	.pkmgmt-step-actions .btn {
-		width: auto;
-	}
-}
-
-/* .radio, not .type-id: the vehicle-type group's outer wrapper is .type-id, but the
- * parking-type group's (Form::parking_type_field()) is .parking_type - scoping on the
- * .radio wrapper both groups actually share is what makes this (pill look, hover
- * cursor/border) apply to both instead of only the vehicle-type pills. */
+/* .radio, not .type-id: the vehicle-type group's outer wrapper is .type-id, the
+ * parking-type group's (Form::parking_type_field()) is .parking_type, and the site
+ * group's (Form::site_field()) is .site_id - scoping on the .radio wrapper every
+ * group actually shares is what makes this (pill look, hover cursor/border) apply
+ * to all three instead of only the vehicle-type pills. */
 form#reservation div.radio label:hover {
 	cursor: pointer;
 }
@@ -535,11 +405,11 @@ form#reservation div.radio label:hover {
 
 /* Excludes checkbox/radio: unscoped, this id-selector rule outranks Bootstrap's
  * .form-check-input class rule and forces every checkbox (keep_keys/ev_charging/
- * cancellation_insurance) into a 46px-tall, pill-radius box instead of its normal
+ * cancellation_insurance) into a 48px-tall, pill-radius box instead of its normal
  * 1em square - radios are already hidden via display:none so they're unaffected
  * either way, but excluding them here too keeps this rule's intent explicit. */
 form#reservation input:not([type="checkbox"]):not([type="radio"]) {
-	height: 46px;
+	height: 48px;
 	border-radius: var(--pkmgmt-radius-sm);
 }
 
@@ -558,7 +428,7 @@ form#reservation select.form-select {
 	display: block;
 	width: 100%;
 	padding: .375rem 2.25rem .375rem .75rem;
-	font-size: 1rem;
+	font-size: 1.1rem;
 	font-weight: 500;
 	line-height: 1.5;
 	color: var(--bs-body-color);
@@ -573,7 +443,7 @@ form#reservation select.form-select {
 	border: var(--bs-border-width) solid var(--bs-border-color);
 	border-radius: var(--pkmgmt-radius-sm);
 	transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
-	height: 46px;
+	height: 48px;
 }
 
 /*
@@ -611,6 +481,7 @@ form#reservation .btn-primary,
 	border-color: var(--pkmgmt-primary);
 	border-radius: var(--pkmgmt-radius-sm);
 	font-weight: 600;
+	font-size: 1.1rem;
 	padding: .75rem 1.5rem;
 	transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
 }
@@ -730,13 +601,13 @@ label.error {
 #reservation .form-label {
 	color: var(--pkmgmt-text);
 	font-weight: 600;
-	font-size: .95rem;
+	font-size: 1.05rem;
 	margin-bottom: .4rem;
 }
 
 #reservation input {
 	color: var(--pkmgmt-text);
-	font-size: 1rem;
+	font-size: 1.1rem;
 }
 
 #reservation .hyphen {

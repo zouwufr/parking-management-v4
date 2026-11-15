@@ -87,8 +87,8 @@ document.addEventListener('DOMContentLoaded', function () {
 	const parkingKeyByValue = {'0': 'ext', '1': 'int', '2': 'valet'};
 
 	function currentSiteId() {
-		const $select = $('.site-select');
-		return $select.length ? $select.val() : external_object.site_id;
+		const $checked = $('input.site-id:checked');
+		return $checked.length ? $checked.val() : external_object.site_id;
 	}
 
 	function currentSite() {
@@ -132,11 +132,9 @@ document.addEventListener('DOMContentLoaded', function () {
 				$(this).prop('checked', false);
 			}
 		});
-		// Check site-support (the pkmgmt-hidden class) directly rather than :visible -
-		// once these radios can also be hidden because their wizard STEP isn't the
-		// active one (unrelated to site support), :visible would be false for every
-		// radio whenever the user isn't on that step, breaking this fallback whenever
-		// the site changes from a different step (e.g. Step 1's site-select).
+		// Check site-support (the pkmgmt-hidden class) directly rather than :visible,
+		// which would also be false while this fieldset itself is offscreen/collapsed
+		// for unrelated layout reasons - this should only ever care about site support.
 		const $visibleParkingType = $parkingTypeRadios.filter(function () {
 			return !$(this).closest('.radio').hasClass('pkmgmt-hidden');
 		});
@@ -217,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				$(this).prop('checked', false);
 			}
 		});
-		// Same site-support-vs-step-visibility caveat as refreshParkingTypeOptions() above.
+		// Same site-support check as refreshParkingTypeOptions() above.
 		const $visibleTypeId = $typeIdRadios.filter(function () {
 			return !$(this).closest('.radio').hasClass('pkmgmt-hidden');
 		});
@@ -260,6 +258,15 @@ document.addEventListener('DOMContentLoaded', function () {
 		"Vérifiez le numéro de téléphone"
 	);
 
+	// Shared by the invalidHandler below (client-side submit attempt) and the
+	// server-side-error recheck further down - focuses the first field the validator
+	// considers invalid, so the visitor isn't left to scroll and find it themselves.
+	function focusFirstInvalidField(validator) {
+		if (validator.errorList.length) {
+			validator.errorList[0].element.focus();
+		}
+	}
+
 	if (external_object.locale === 'fr_FR')
 		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_fr.min.js");
 	if (external_object.locale === 'de_DE')
@@ -267,10 +274,10 @@ document.addEventListener('DOMContentLoaded', function () {
 	if (external_object.locale === 'nl_NL')
 		loadScript("https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.20.0/localization/messages_nl.min.js");
 	$("#reservation").validate({
-		// jQuery Validate defaults to ignoring :hidden fields entirely. Every step but the
-		// current one is hidden via .pkmgmt-step-hidden (display:none !important), so without
-		// this the final submit was only ever validating whichever step happened to be open,
-		// silently skipping the other two - this is what let incomplete steps through.
+		// jQuery Validate defaults to ignoring :hidden fields entirely, but a field can be
+		// hidden here for reasons unrelated to completeness (e.g. a parking/vehicle-type
+		// radio hidden because the selected site doesn't support it via .pkmgmt-hidden) -
+		// validating everything regardless of visibility keeps that distinct from "missing".
 		ignore: [],
 		rules: {
 			nom: {
@@ -316,15 +323,10 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		},
 
-		// Jumps back to whichever step holds the first invalid field, so form.js's error
-		// label is never rendered behind a hidden .pkmgmt-step - fires before showErrors()
-		// runs (jQuery Validate triggers invalid-form, then shows errors), so by the time
-		// the error is actually displayed the right step is already visible.
-		// jumpToFirstInvalidStep() is a function declaration defined further down in this
-		// same scope - safe to reference here since it's hoisted and only ever called once
-		// the whole script (and thus that declaration) has already run.
+		// Focuses the first invalid field so the error label jQuery Validate is about to
+		// render (invalid-form fires before showErrors()) is never scrolled out of view.
 		invalidHandler: function (event, validator) {
-			jumpToFirstInvalidStep(validator);
+			focusFirstInvalidField(validator);
 		},
 
 		submitHandler: function (form) {
@@ -357,17 +359,15 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	})
 
-	$('.site-select').on('change', function () {
+	$(document).on('change', 'input.site-id', function () {
 		applySite($(this).val());
 		loadSiteDependentDates();
 		getPrice();
 	});
-	// Single-site deployments have no `.site-select` in the DOM (see
-	// Form::site_id_field()), so `.trigger('change')` on it never fired and the
-	// vehicle/parking-type filtering below never ran on page load - every option
-	// stayed visible regardless of what the site actually supports. Apply the
-	// current site's restrictions directly instead of relying on that element
-	// existing.
+	// Single-site deployments have no `input.site-id` in the DOM (see
+	// Form::site_field()), so there's nothing to change and trigger applySite() via
+	// the listener above - apply the current site's restrictions directly instead of
+	// relying on that element existing.
 	applySite(currentSiteId());
 	loadSiteDependentDates();
 
@@ -376,66 +376,6 @@ document.addEventListener('DOMContentLoaded', function () {
 	// separately via the shared change listener below).
 	$(document).on('change', 'input.type-id', function () {
 		refreshParkingTypeOptions(currentSite());
-	});
-
-	// Step wizard: purely a client-side progressive-disclosure layer over the single
-	// #reservation form - every field from every step is still rendered server-side on
-	// page load (see Form::step_fieldset() in form.php) and nothing is fetched/submitted
-	// per step. Next/Prev never block navigation - the real "Pay and validate" submit
-	// (see the invalidHandler on $("#reservation").validate({...}) above) is what
-	// actually enforces required fields now, and jumps back to whichever step holds the
-	// first invalid one, so gating Next on per-step completeness would just be a second,
-	// redundant blocker.
-	const TOTAL_STEPS = 3;
-	let currentStep = 1;
-	const stepFieldIds = {
-		1: ['destination', 'depart', 'retour', 'nb_pax'],
-		2: ['modele', 'immatriculation'],
-		3: ['nom', 'prenom', 'code_postal', 'mobile', 'email'],
-	};
-
-	// Shared by the invalidHandler above (client-side submit attempt) and the
-	// server-side-error recheck below - finds the first step holding a field the
-	// validator considers invalid and shows it, so the error label form.js renders is
-	// never left stranded behind a hidden step.
-	function jumpToFirstInvalidStep(validator) {
-		for (let n = 1; n <= TOTAL_STEPS; n++) {
-			const hasInvalid = (stepFieldIds[n] || []).some(function (id) {
-				const el = document.getElementById(id);
-				return el && !validator.element('#' + id);
-			});
-			if (hasInvalid) {
-				showStep(n);
-				return;
-			}
-		}
-		showStep(1);
-	}
-
-	function showStep(n) {
-		$('.pkmgmt-step').each(function () {
-			const $step = $(this);
-			const isActive = parseInt($step.data('step'), 10) === n;
-			$step.toggleClass('pkmgmt-step-hidden', !isActive);
-			$step.attr('aria-hidden', isActive ? 'false' : 'true');
-		});
-		$('.pkmgmt-progress-step').each(function () {
-			const $item = $(this);
-			const stepNum = parseInt($item.data('step'), 10);
-			$item.attr('aria-current', stepNum === n ? 'step' : 'false');
-			$item.toggleClass('pkmgmt-progress-step-done', stepNum < n);
-		});
-		const $heading = $('#pkmgmt-step-' + n + '-heading');
-		$('#pkmgmt-step-announcer').text('Step ' + n + ' of ' + TOTAL_STEPS + ': ' + $heading.text());
-		$heading.trigger('focus');
-		currentStep = n;
-	}
-
-	$(document).on('click', '.pkmgmt-step-next', function () {
-		showStep(Math.min(currentStep + 1, TOTAL_STEPS));
-	});
-	$(document).on('click', '.pkmgmt-step-prev', function () {
-		showStep(Math.max(currentStep - 1, 1));
 	});
 
 	// Date picker
@@ -675,10 +615,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	// After a server-side validation error (e.g. Member::create()'s required-field
 	// check), the page re-renders fully populated from the submitted values with an
-	// error banner on top - don't strand the visitor on Step 1 if the actual invalid
-	// field lives on a later step.
+	// error banner on top - focus the actual invalid field instead of leaving the
+	// visitor to scroll and find it themselves.
 	if ($('.alert-danger').length) {
-		jumpToFirstInvalidStep($('#reservation').validate());
+		focusFirstInvalidField($('#reservation').validate());
 	}
 });
 
