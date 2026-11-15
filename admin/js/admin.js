@@ -290,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		return `
 			<div class="site-item border rounded p-3 mb-3" data-site-id="${id}">
 				<div class="d-flex justify-content-between align-items-start mb-2">
+					<i class="fas fa-grip-vertical site-drag-handle me-3" title="Drag to reorder - the first active site is selected by default on the booking form"></i>
 					<div class="location_field flex-grow-1 me-3">
 						<label for="site-${id}-name">Name</label><br/>
 						<input type="text" id="site-${id}-name" name="${name}[name]" class="wide" size="80">
@@ -421,6 +422,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	$('#sites_body').on('click', '.delete-site', function () {
 		$(this).closest('.site-item').remove();
+	});
+
+	// Site order here is submitted as-is in `pkmgmt-sites[]` and saved in that order,
+	// which is also the order Site::activeOnly() returns - so dragging a site to the
+	// top also makes it the default one selected on the booking form (Site::defaultSite()
+	// picks the first active site).
+	$('#sites_body').sortable({
+		handle: '.site-drag-handle',
+		axis: 'y',
+		placeholder: 'site-item-placeholder',
+		forcePlaceholderSize: true,
+		tolerance: 'pointer',
 	});
 
 	$(document).on('change', 'select[name$="[airport]"]', function () {
