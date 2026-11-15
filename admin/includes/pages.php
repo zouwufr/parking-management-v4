@@ -671,6 +671,7 @@ class Pages
 		$box = ['id' => "site-$id"];
 
 		$header = '<div class="d-flex justify-content-between align-items-start mb-2">'
+			. '<i class="fas fa-grip-vertical site-drag-handle me-3" title="' . esc_attr__('Drag to reorder - the first active site is selected by default on the booking form', 'parking-management') . '"></i>'
 			. self::_field("site-$id-name", 'location_field flex-grow-1 me-3', "{$name}[name]", esc_html__('Name', 'parking-management'), $site['name'] ?? '')
 			. '<span class="site-id-badge text-muted small me-3" title="'
 			. esc_attr__('Use this id in the booking page URL, e.g. ?site_id=' . $id, 'parking-management')

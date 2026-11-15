@@ -531,3 +531,7 @@ msgstr "+%s€ haute saison"
 #: modules/price/includes/page.php:108
 msgid "Prices"
 msgstr "Tarifs"
+
+#: admin/includes/pages.php:674
+msgid "Drag to reorder - the first active site is selected by default on the booking form"
+msgstr "Glisser pour réordonner - le premier site actif est sélectionné par défaut sur le formulaire de réservation"

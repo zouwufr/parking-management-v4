@@ -342,6 +342,27 @@ legend {
 	align-self: center;
 }
 
+#poststuff .site-drag-handle {
+	cursor: grab;
+	color: #a0a0a0;
+	align-self: center;
+}
+
+#poststuff .site-drag-handle:active {
+	cursor: grabbing;
+}
+
+#poststuff .site-item.ui-sortable-helper {
+	box-shadow: 0 4px 16px rgba(16, 24, 40, 0.15);
+}
+
+#poststuff .site-item-placeholder {
+	border: 2px dashed var(--pkmgmt-primary);
+	border-radius: 6px;
+	background: rgba(3, 111, 175, 0.05);
+	margin-bottom: 1rem;
+}
+
 .tab {
 	display: none;
 }
