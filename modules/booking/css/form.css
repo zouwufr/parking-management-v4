@@ -39,7 +39,7 @@
 	font-family: var(--pkmgmt-font);
 	color: var(--pkmgmt-primary) !important;
 	font-weight: 700 !important;
-	font-size: 1.65em !important;
+	font-size: 1.9em !important;
 	letter-spacing: -.01em;
 	margin-bottom: 15px;
 	margin-top: 15px;
@@ -53,7 +53,7 @@ form#reservation {
 form#reservation legend {
 	width: auto;
 	float: none;
-	font-size: 1.3rem;
+	font-size: 1.5rem;
 	font-weight: 700;
 	color: var(--pkmgmt-text);
 	padding: 0 0 0 .75rem;
@@ -385,6 +385,7 @@ form#reservation div.radio label {
 	padding: 12px 24px;
 	margin-bottom: 10px;
 	margin-top: 10px;
+	font-size: 1.2rem;
 	line-height: normal;
 	display: flex;
 	align-items: center;
@@ -409,7 +410,7 @@ form#reservation div.radio label:hover {
  * 1em square - radios are already hidden via display:none so they're unaffected
  * either way, but excluding them here too keeps this rule's intent explicit. */
 form#reservation input:not([type="checkbox"]):not([type="radio"]) {
-	height: 48px;
+	height: 52px;
 	border-radius: var(--pkmgmt-radius-sm);
 }
 
@@ -428,7 +429,7 @@ form#reservation select.form-select {
 	display: block;
 	width: 100%;
 	padding: .375rem 2.25rem .375rem .75rem;
-	font-size: 1.1rem;
+	font-size: 1.25rem;
 	font-weight: 500;
 	line-height: 1.5;
 	color: var(--bs-body-color);
@@ -443,7 +444,7 @@ form#reservation select.form-select {
 	border: var(--bs-border-width) solid var(--bs-border-color);
 	border-radius: var(--pkmgmt-radius-sm);
 	transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
-	height: 48px;
+	height: 52px;
 }
 
 /*
@@ -481,8 +482,8 @@ form#reservation .btn-primary,
 	border-color: var(--pkmgmt-primary);
 	border-radius: var(--pkmgmt-radius-sm);
 	font-weight: 600;
-	font-size: 1.1rem;
-	padding: .75rem 1.5rem;
+	font-size: 1.3rem;
+	padding: .85rem 1.75rem;
 	transition: background-color .15s ease, transform .1s ease, box-shadow .15s ease;
 }
 
@@ -601,13 +602,13 @@ label.error {
 #reservation .form-label {
 	color: var(--pkmgmt-text);
 	font-weight: 600;
-	font-size: 1.05rem;
+	font-size: 1.2rem;
 	margin-bottom: .4rem;
 }
 
 #reservation input {
 	color: var(--pkmgmt-text);
-	font-size: 1.1rem;
+	font-size: 1.25rem;
 }
 
 #reservation .hyphen {
@@ -747,6 +748,7 @@ label.error {
 
 #reservation .options-checkbox ~ .form-check-label {
 	cursor: pointer;
+	font-size: 1.1rem;
 }
 
 /*
