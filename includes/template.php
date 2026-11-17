@@ -244,15 +244,6 @@ class Template
 		];
 	}
 
-	private static function tariff_table(): array
-	{
-		return array(
-			'ext' => array('jour_supplementaire' => 0),
-			'int' => array('jour_supplementaire' => 0),
-			'valet' => array('jour_supplementaire' => 0),
-		);
-	}
-
 	private static function sites(): array
 	{
 		return array();
@@ -301,13 +292,6 @@ class Template
 				'car' => '0',
 				'motorcycle' => '0',
 				'truck' => '0',
-			),
-
-			// tariffs[vehicle][parking_type][day] = price, plus 'jour_supplementaire'.
-			'tariffs' => array(
-				'car' => self::tariff_table(),
-				'motorcycle' => self::tariff_table(),
-				'truck' => self::tariff_table(),
 			),
 
 			'form' => array(

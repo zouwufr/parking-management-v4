@@ -86,7 +86,7 @@ class SupabaseSync
 			return;
 		}
 
-		$type_id = VehicleType::fromInt((int)($vehicle['type_id'] ?? 1));
+		$type_id = VehicleType::fromSubmitted($vehicle['type_id'] ?? null);
 		$vehicle_category = match ($type_id) {
 			VehicleType::CAR => 'car',
 			VehicleType::MOTORCYCLE => 'moto',

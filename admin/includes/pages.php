@@ -682,7 +682,6 @@ class Pages
 
 		$sections = [
 			'info' => ['label' => esc_html__('Info', 'parking-management'), 'content' => self::_site_info_tab($id, $name, $site)],
-			'tariffs' => ['label' => esc_html__('Price', 'parking-management'), 'content' => self::_site_tariffs_tab($name, $site)],
 			'form' => ['label' => esc_html__('Form options', 'parking-management'), 'content' => self::_site_form_tab($box, $name, $site)],
 			'booked' => ['label' => esc_html__('Booked dates', 'parking-management'), 'content' => self::_site_booked_dates_tab($name, $site)],
 			'high_season' => ['label' => esc_html__('High season', 'parking-management'), 'content' => self::_site_high_season_tab($name, $site)],
@@ -795,41 +794,6 @@ class Pages
 		$supabaseFields[] = self::_field("site-$id-supabase-site-id", 'location_field', "{$name}[supabase_site_id]", esc_html__('Supabase site id', 'parking-management'), $site['supabase_site_id'] ?? '');
 		$contents[] = self::_fieldset(esc_html__('Supabase sync', 'parking-management'), ...$supabaseFields);
 
-		return implode(PHP_EOL, $contents);
-	}
-
-	private static function _site_tariffs_tab(string $name, array $site): string
-	{
-		$tariffs = $site['tariffs'] ?? [];
-		$contents = [];
-		$contents[] = '<p class="description">' . esc_html__('This is the price grid served by this site\'s own GET /wp-json/pkmgmt/v1/prices response - the booking form calls that endpoint to compute the total shown to the customer. Valet is only ever offered for cars.', 'parking-management') . '</p>';
-		$contents[] = '<div class="price-grid-io mb-3">';
-		$contents[] = '<button type="button" class="button price-export">' . esc_html__('Export CSV', 'parking-management') . '</button> ';
-		$contents[] = '<button type="button" class="button price-import-trigger">' . esc_html__('Import CSV', 'parking-management') . '</button> ';
-		$contents[] = '<button type="button" class="button price-load-db">' . esc_html__('Load from DB', 'parking-management') . '</button>';
-		$contents[] = '<input type="file" accept=".csv,text/csv" class="price-import-file" style="display:none">';
-		$contents[] = '</div>';
-		foreach (['car', 'motorcycle', 'truck'] as $vehicle) {
-			$parkingKeys = $vehicle === 'car' ? ['ext', 'int', 'valet'] : ['ext', 'int'];
-			foreach ($parkingKeys as $parkingKey) {
-				$vehicleTariff = $tariffs[$vehicle][$parkingKey] ?? [];
-				$contents[] = '<div class="tariff-vehicle mb-2" data-vehicle="' . esc_attr($vehicle) . '" data-parking-type="' . esc_attr($parkingKey) . '">';
-				$contents[] = '<strong>' . esc_html(ucfirst($vehicle)) . ' - ' . esc_html(strtoupper($parkingKey)) . '</strong>';
-				$contents[] = '<div class="row g-2 align-items-end">';
-				for ($day = 1; $day <= 30; $day++) {
-					$contents[] = '<div class="col-auto">';
-					$contents[] = '<label class="form-label small mb-0">' . sprintf(esc_html__('%d day(s)', 'parking-management'), $day) . '</label>';
-					$contents[] = '<input type="number" step="0.01" class="form-control form-control-sm" data-day="' . esc_attr($day) . '" name="' . esc_attr("{$name}[tariffs][{$vehicle}][{$parkingKey}][{$day}]") . '" value="' . esc_attr($vehicleTariff[$day] ?? '') . '">';
-					$contents[] = '</div>';
-				}
-				$contents[] = '<div class="col-auto">';
-				$contents[] = '<label class="form-label small mb-0">' . esc_html__('Extra day', 'parking-management') . '</label>';
-				$contents[] = '<input type="number" step="0.01" class="form-control form-control-sm" data-day="jour_supplementaire" name="' . esc_attr("{$name}[tariffs][{$vehicle}][{$parkingKey}][jour_supplementaire]") . '" value="' . esc_attr($vehicleTariff['jour_supplementaire'] ?? '') . '">';
-				$contents[] = '</div>';
-				$contents[] = '</div>';
-				$contents[] = '</div>';
-			}
-		}
 		return implode(PHP_EOL, $contents);
 	}
 

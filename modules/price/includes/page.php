@@ -5,6 +5,7 @@ namespace Price;
 use ParkingManagement\Html;
 use ParkingManagement\interfaces\IParkingmanagement;
 use ParkingManagement\ParkingManagement;
+use ParkingManagement\TariffGrid;
 
 class Page implements IParkingmanagement
 {
@@ -46,12 +47,14 @@ class Page implements IParkingmanagement
 		];
 
 		$columns = [];
+		$today = current_time('Y-m-d');
 		foreach ($this->sites as $site) {
+			$tariffs = TariffGrid::onDate($site, $today);
 			foreach ($parkingTypes as $parkingKey => $typeLabel) {
 				if (($site['type'][$parkingKey] ?? '0') !== '1') {
 					continue;
 				}
-				$tariff = $site['tariffs']['car'][$parkingKey] ?? [];
+				$tariff = $tariffs['car'][$parkingKey] ?? [];
 				if (empty($tariff)) {
 					continue;
 				}

@@ -132,7 +132,10 @@ class Order
 			'terminal' => serialize($this->getData('terminal')),
 			'remarque' => '',
 			'total' => $price['total'],
-			'grille_tarifaire' => serialize($price),
+			// The tariff grid, not this order's price breakdown: the parkineo admin
+			// recalculates edited orders from this column. Empty makes it fall back
+			// to its own grid of the day instead of pricing the parking at 0.
+			'grille_tarifaire' => empty($grid = $priceInstance->usedLegacyGrid()) ? '' : serialize($grid),
 			'tva' => $this->site['tva'] ?? 20,
 			'tva_transport' => $this->site['tva_transport'] ?? 10,
 			'coupon_id' => 0,
@@ -143,6 +146,14 @@ class Order
 			'host' => $_SERVER['HTTP_USER_AGENT'],
 			'referer' => $referer_host
 		);
+		// Columns added by parkineo sql/03-commande-source-detail-prix.sql, only
+		// written once that migration has run on this booking database.
+		if (database::hasColumn($this->conn, 'tbl_commande', 'detail_prix')) {
+			$order['detail_prix'] = serialize($price);
+		}
+		if (database::hasColumn($this->conn, 'tbl_commande', 'source')) {
+			$order['source'] = wp_parse_url(home_url(), PHP_URL_HOST);
+		}
 		Logger::info("order.create", ['params' => $order]);
 
 		if ($this->conn->insert(
