@@ -523,4 +523,102 @@ document.addEventListener('DOMContentLoaded', function () {
 		$('.btn-close').trigger('click');
 	})
 
+	// The config form's info/database/sites/supabase fields are bundled into
+	// one `pkmgmt-json` field on submit instead of posting thousands of
+	// individual bracketed inputs - that used to blow past PHP's
+	// max_input_vars (1000 by default) as soon as there were a couple of
+	// sites, silently dropping whatever came after the limit (see
+	// Admin::post_truncated() in admin/admin.php, kept there as a fallback
+	// for the rare non-JS submission).
+	//
+	// Keep this in sync with ParkingManagement::properties_available.
+	const PKMGMT_JSON_PROPERTIES = ['pkmgmt-info', 'pkmgmt-database', 'pkmgmt-sites', 'pkmgmt-supabase'];
+
+	// Splits a bracketed form field name ("pkmgmt-sites[792698][tariffs]")
+	// into ["pkmgmt-sites", "792698", "tariffs"].
+	function pkmgmtNameToPath(name) {
+		const firstBracket = name.indexOf('[');
+		if (firstBracket === -1) {
+			return [name];
+		}
+		const path = [name.slice(0, firstBracket)];
+		const re = /\[([^\]]*)]/g;
+		re.lastIndex = firstBracket;
+		let match;
+		while ((match = re.exec(name)) !== null) {
+			path.push(match[1]);
+		}
+		return path;
+	}
+
+	// Writes `value` at `path` into a tree of Maps. A plain object would do,
+	// except PHP preserves the exact order array keys were encountered in -
+	// including numeric-looking ones (site ids) - while a JS object always
+	// reorders integer-like keys ascending. That would silently undo the
+	// site drag-reorder feature, so Maps (which keep insertion order for
+	// every key type) are used instead and turned into JSON text by hand.
+	function pkmgmtSetPath(root, path, value) {
+		let node = root;
+		for (let i = 0; i < path.length - 1; i++) {
+			const key = path[i];
+			if (!(node.get(key) instanceof Map)) {
+				node.set(key, new Map());
+			}
+			node = node.get(key);
+		}
+		// Later entries for the same name win, matching how PHP keeps only
+		// the last value for duplicate POST keys (relied on by the
+		// hidden-input-plus-checkbox pairs used for the option toggles).
+		node.set(path[path.length - 1], value);
+	}
+
+	function pkmgmtStringify(node) {
+		if (node instanceof Map) {
+			const parts = [];
+			for (const [key, value] of node) {
+				parts.push(JSON.stringify(String(key)) + ':' + pkmgmtStringify(value));
+			}
+			return '{' + parts.join(',') + '}';
+		}
+		return JSON.stringify(node);
+	}
+
+	const pkmgmtConfigForm = document.getElementById('pkmgmt-admin-config');
+	if (pkmgmtConfigForm) {
+		pkmgmtConfigForm.addEventListener('submit', function () {
+			const root = new Map();
+			const matchedNames = new Set();
+
+			for (const [name, value] of new FormData(pkmgmtConfigForm).entries()) {
+				if (typeof value !== 'string') {
+					continue; // file inputs - none of these fields have one
+				}
+				const base = name.indexOf('[') === -1 ? name : name.slice(0, name.indexOf('['));
+				if (!PKMGMT_JSON_PROPERTIES.includes(base)) {
+					continue;
+				}
+				matchedNames.add(name);
+				pkmgmtSetPath(root, pkmgmtNameToPath(name), value);
+			}
+
+			let jsonInput = pkmgmtConfigForm.querySelector('input[name="pkmgmt-json"]');
+			if (!jsonInput) {
+				jsonInput = document.createElement('input');
+				jsonInput.type = 'hidden';
+				jsonInput.name = 'pkmgmt-json';
+				pkmgmtConfigForm.appendChild(jsonInput);
+			}
+			jsonInput.value = pkmgmtStringify(root);
+
+			// Disabled fields are left out of the submission entirely, so
+			// only pkmgmt-json (plus the handful of unrelated top-level
+			// fields such as title/name/locale/nonces) is actually posted.
+			matchedNames.forEach(function (name) {
+				pkmgmtConfigForm.querySelectorAll('[name="' + name + '"]').forEach(function (el) {
+					el.disabled = true;
+				});
+			});
+		});
+	}
+
 });

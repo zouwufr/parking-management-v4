@@ -138,8 +138,30 @@ class Admin
 	{
 		switch ($this->current_action()) {
 			case "save":
-				$pm = $this->load_save();
 				$query = array();
+				if (isset($_POST['pkmgmt-json'])) {
+					// The form bundles info/database/sites/supabase into one
+					// JSON field precisely so this can't happen regardless of
+					// how many sites exist - but if that field got mangled in
+					// transit, fail loudly instead of saving with the
+					// properties it covers silently reset to their defaults.
+					if (!self::merge_json_fields()) {
+						$query['message'] = __('Not saved: the configuration data was corrupted in transit. Please try again.', 'parking-management');
+						wp_safe_redirect(add_query_arg($query, menu_page_url('pkmgmt', false)));
+						exit();
+					}
+				} elseif (self::post_truncated()) {
+					// Fallback for a non-JS submission: PHP silently dropped the
+					// trailing fields (Supabase, last site...), and saving now
+					// would overwrite them with defaults, so refuse.
+					$query['message'] = sprintf(
+						__('Not saved: the form has more fields than PHP max_input_vars (%d) allows, so some values were dropped. Raise max_input_vars and save again.', 'parking-management'),
+						(int)ini_get('max_input_vars')
+					);
+					wp_safe_redirect(add_query_arg($query, menu_page_url('pkmgmt', false)));
+					exit();
+				}
+				$pm = $this->load_save();
 				if (!$pm) {
 					$query['message'] = 'failed';
 				} else {
@@ -152,6 +174,49 @@ class Admin
 				$this->load_default();
 				break;
 		}
+	}
+
+	/**
+	 * True when PHP hit max_input_vars while parsing the POST body, i.e. the
+	 * trailing fields of the config form never reached us.
+	 */
+	private static function post_truncated(): bool
+	{
+		$max = (int)ini_get('max_input_vars');
+		if ($max <= 0) {
+			return false;
+		}
+		$leaves = 0;
+		array_walk_recursive($_POST, static function () use (&$leaves) {
+			$leaves++;
+		});
+		return $leaves >= $max;
+	}
+
+	/**
+	 * The config form's JS bundles the info/database/sites/supabase fields
+	 * into one `pkmgmt-json` field instead of posting each of them
+	 * individually, so the save can't be truncated by max_input_vars no
+	 * matter how many sites exist. Decodes that field back into $_POST so
+	 * load_save() can read it exactly like it always has. Returns false if
+	 * the field isn't valid JSON, without touching $_POST.
+	 */
+	private static function merge_json_fields(): bool
+	{
+		$json = wp_unslash($_POST['pkmgmt-json']);
+		$decoded = json_decode($json, true);
+		if (!is_array($decoded)) {
+			return false;
+		}
+		foreach (ParkingManagement::properties_available as $property => $config) {
+			$key = 'pkmgmt-' . $property;
+			if (array_key_exists($key, $decoded)) {
+				// Re-slash: load_save() unslashes $_POST as a whole further
+				// down, same as it always has for the non-JS fields.
+				$_POST[$key] = wp_slash($decoded[$key]);
+			}
+		}
+		return true;
 	}
 
 	/**
