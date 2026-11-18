@@ -43,6 +43,21 @@ class database {
 
 		return $dsn;
 	}
+	/**
+	 * Whether $table has $column, cached per request. Lets new columns be written
+	 * only once the matching SQL migration has run on that booking database, so a
+	 * plugin deployed ahead of the migration keeps taking bookings.
+	 */
+	public static function hasColumn(wpdb $conn, string $table, string $column): bool
+	{
+		static $cache = [];
+		$key = $conn->dbname . '.' . $table . '.' . $column;
+		if (!array_key_exists($key, $cache)) {
+			$cache[$key] = (bool)$conn->get_var($conn->prepare("SHOW COLUMNS FROM `$table` LIKE %s", [$column]));
+		}
+		return $cache[$key];
+	}
+
 	public static function getError(): array
 	{
 		return self::$error;

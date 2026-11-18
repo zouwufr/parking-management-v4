@@ -61,44 +61,6 @@ class PriceAPI extends API
 				)
 			)
 		);
-
-		register_rest_route($this->namespace, self::rest_base . '/db-grid', array(
-				array(
-					'methods' => WP_REST_Server::READABLE,
-					'callback' => array($this, 'get_db_grid'),
-					'permission_callback' => function () {
-						return current_user_can('manage_options');
-					},
-					'args' => array(
-						'legacy_site_id' => array(
-							'description' => "Legacy parking_id (tbl_remplissage/tbl_commande) to load the tariff grid for",
-							'type' => "string",
-							'required' => true,
-						),
-					),
-				)
-			)
-		);
-	}
-
-	/**
-	 * Admin-only: pulls the legacy system's own tariff grid (tbl_remplissage.grille_tarifaire)
-	 * for the given legacy site id, used to prefill a site's Price tab from the database.
-	 *
-	 * @param WP_REST_Request $request Full details about the request.
-	 * @return WP_Error|WP_REST_Response Response object on success, or WP_Error object on failure.
-	 */
-	public function get_db_grid($request): WP_Error|WP_REST_Response
-	{
-		try {
-			$pm = getParkingManagementInstance();
-			$price = new Price($pm);
-			$data = $price->loadFromDatabase($request->get_param('legacy_site_id'));
-		} catch (Exception $e) {
-			Logger::error("price.api.get_db_grid", $e->getMessage());
-			return new WP_Error('error', $e->getMessage());
-		}
-		return rest_ensure_response($data);
 	}
 
 	/**

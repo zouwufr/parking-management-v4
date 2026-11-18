@@ -38,7 +38,7 @@ class Vehicle
 		$price = $priceInstance->getPrice($this->data);
 		$params = array(
 			'commande_id' => $order_id
-		, 'type_id' => $this->getData('type_id')
+		, 'type_id' => VehicleType::fromSubmitted($this->getData('type_id'))->value
 		, 'parking_type' => $this->getData('parking_type')
 		, 'options' => serialize(array())
 		, 'marque' => $this->getData('marque') ?? 'Unknown'

@@ -2,7 +2,6 @@
 
 namespace ParkingManagement;
 
-use Booking\Airport;
 use Booking\Order;
 use Booking\ParkingType;
 use Booking\Site;
@@ -18,10 +17,14 @@ use WP_REST_Request;
 
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "price" . DS . "includes" . DS . "page.php";
 require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "price" . DS . "includes" . DS . "api.php";
+require_once PKMGMT_PLUGIN_MODULES_DIR . DS . "price" . DS . "includes" . DS . "tariff_grid.php";
 
 
 class Price implements IShortcode, IParkingmanagement
 {
+	/** Tariffs the last getPrice() priced with, see usedLegacyGrid(). */
+	private array $usedTariffs = [];
+
 	private ParkingManagement $pm;
 
 	public function __construct(ParkingManagement $pm)
@@ -137,17 +140,13 @@ class Price implements IShortcode, IParkingmanagement
 			}
 
 			// Process vehicle type
-			$type_id = $this->getData($data, 'type_id');
-			$type_id = !empty($type_id) && is_numeric($type_id) ? $type_id : '1';
-			if (!is_numeric($type_id)) {
-				$type_id = '1';
-			}
-			$type_id = VehicleType::fromInt((int)$type_id);
+			$type_id = VehicleType::fromSubmitted($this->getData($data, 'type_id'));
 
 			$parking_type = $this->resolveParkingType($data, $site, $type_id);
 			$vehicleKey = strtolower($type_id->name);
 			$parkingKey = self::parkingTypeKey($parking_type);
-			$tariff = $site['tariffs'][$vehicleKey][$parkingKey] ?? [];
+			$this->usedTariffs = TariffGrid::forStay($site, $start, $end, $vehicleKey, $parkingKey, $numberOfDay);
+			$tariff = $this->usedTariffs[$vehicleKey][$parkingKey] ?? [];
 
 			Logger::info("price.getPrice.types", [
 				'site_id' => $site['id'],
@@ -166,12 +165,15 @@ class Price implements IShortcode, IParkingmanagement
 			}
 
 			// Calculate base price
-			if (!empty($tariff[$numberOfDay])) {
-				$total = $tariff[$numberOfDay];
-			} else {
-				$latest = self::latestPrice($tariff);
-				$total = $tariff[$latest] ?? 0;
-				$total += ($numberOfDay - $latest) * ($tariff['jour_supplementaire'] ?? 0);
+			$total = TariffGrid::price($tariff, $numberOfDay);
+			if ($total === 0) {
+				Logger::error("price.getPrice.tariff", [
+					'site_id' => $site['id'],
+					'vehicle_type' => $vehicleKey,
+					'parking_type' => $parkingKey,
+					'days' => $numberOfDay,
+					'message' => 'tariff gives a 0 parking price',
+				]);
 			}
 
 			$price['total'] = $price['total_reel'] = (int)$total;
@@ -268,6 +270,15 @@ class Price implements IShortcode, IParkingmanagement
 	}
 
 	/**
+	 * The tariff grid the last getPrice() used, in the legacy single-site shape the
+	 * parkineo admin stores in `tbl_commande.grille_tarifaire` and reprices from.
+	 */
+	public function usedLegacyGrid(): array
+	{
+		return empty($this->usedTariffs) ? [] : TariffGrid::toLegacySiteGrid($this->usedTariffs);
+	}
+
+	/**
 	 * Picks the parking type (ext/int/valet) to price against: the submitted value
 	 * when it is one the site actually enables, otherwise the site's first enabled
 	 * type.
@@ -334,83 +345,15 @@ class Price implements IShortcode, IParkingmanagement
 	}
 
 	/**
-	 * Pulls the most recently written tariff grid out of the legacy
-	 * `tbl_remplissage.grille_tarifaire` column - the same row/table
-	 * `Booked::getMaxLot()`/`usedLot()` already read `client`/`employe`/`utilisee`
-	 * from - and reshapes it into this plugin's own
-	 * `tariffs[vehicle][parking_type][day]` grid for the given legacy site id (Airport::value,
-	 * aka parking_id in the legacy grid - see Order::resolveLegacySiteID()). Used by the admin
-	 * "Load from DB" action to prefill a site's Price tab from data the legacy system already
-	 * has, instead of hand-typing or CSV-importing it.
-	 * @throws Exception
-	 */
-	public function loadFromDatabase(string $legacySiteId): array
-	{
-		if ($legacySiteId === '' || !is_numeric($legacySiteId)) {
-			return [];
-		}
-		try {
-			$parkingId = Airport::fromInt((int)$legacySiteId)->value;
-		} catch (InvalidArgumentException) {
-			return [];
-		}
-
-		$conn = database::connect();
-		if (!$conn) {
-			throw new Exception("Database connection failed");
-		}
-		$row = $conn->get_row("SELECT `grille_tarifaire` FROM `tbl_remplissage` ORDER BY `date` DESC LIMIT 1", ARRAY_A);
-		if (!empty($conn->last_error)) {
-			Logger::error("price.loadFromDatabase", ['errorInfo' => $conn->last_error]);
-			throw new Exception("Error executing query");
-		}
-		if (empty($row['grille_tarifaire'])) {
-			return [];
-		}
-		$grid = @unserialize($row['grille_tarifaire'], ['allowed_classes' => false]);
-		if (!is_array($grid)) {
-			return [];
-		}
-		$siteGrid = $grid[$parkingId] ?? [];
-		if (!is_array($siteGrid)) {
-			return [];
-		}
-
-		$tariffs = [];
-		foreach (VehicleType::cases() as $vehicleType) {
-			foreach (ParkingType::cases() as $parkingType) {
-				if ($parkingType === ParkingType::VALET) {
-					continue; // the legacy grid has no valet slot - valet is this plugin's own addition
-				}
-				$days = $siteGrid[$vehicleType->value][$parkingType->value] ?? [];
-				if (empty($days) || !is_array($days)) {
-					continue;
-				}
-				$entry = [];
-				for ($day = 1; $day <= 30; $day++) {
-					if (isset($days[$day]) && is_numeric($days[$day])) {
-						$entry[$day] = $days[$day];
-					}
-				}
-				if (isset($days['jour_supplementaire']) && is_numeric($days['jour_supplementaire'])) {
-					$entry['jour_supplementaire'] = $days['jour_supplementaire'];
-				}
-				if (!empty($entry)) {
-					$tariffs[strtolower($vehicleType->name)][self::parkingTypeKey($parkingType)] = $entry;
-				}
-			}
-		}
-		return $tariffs;
-	}
-
-	/**
 	 * Returns every active site's own tariff table, keyed by site id, used by the
 	 * price REST endpoint when no specific dates are requested.
 	 */
 	public function allSitesTariffs(): array
 	{
 		$price = [];
+		$today = current_time('Y-m-d');
 		foreach (Site::activeOnly() as $id => $site) {
+			$tariffs = TariffGrid::onDate($site, $today);
 			foreach ($site['vehicle_types'] ?? [] as $vehicleKey => $enabled) {
 				if ($enabled !== '1') {
 					continue;
@@ -419,7 +362,7 @@ class Price implements IShortcode, IParkingmanagement
 					if (($site['type'][$parkingKey] ?? '0') !== '1') {
 						continue;
 					}
-					$tariff = $site['tariffs'][$vehicleKey][$parkingKey] ?? [];
+					$tariff = $tariffs[$vehicleKey][$parkingKey] ?? [];
 					$days = [];
 					foreach ($tariff as $day => $value) {
 						if (is_numeric($day) && !empty($value)) {

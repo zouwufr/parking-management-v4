@@ -19,4 +19,20 @@ enum VehicleType: int
 		}
 		throw new InvalidArgumentException("Invalid value for VehicleType enum: $value");
 	}
+
+	/**
+	 * A submitted vehicle type, defaulting to a car when it is missing, 0 or unknown
+	 * (same type for pricing and for the tbl_vehicule row the legacy admin reprices from).
+	 */
+	public static function fromSubmitted(mixed $value): self
+	{
+		if (is_numeric($value)) {
+			try {
+				return self::fromInt((int)$value);
+			} catch (InvalidArgumentException) {
+				// fall through to CAR
+			}
+		}
+		return self::CAR;
+	}
 }
