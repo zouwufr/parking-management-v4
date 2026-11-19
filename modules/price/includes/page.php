@@ -63,6 +63,7 @@ class Page implements IParkingmanagement
 					'type' => $typeLabel,
 					'tariff' => $tariff,
 					'high_season' => $site['high_season']['price'] ?? 0,
+					'color' => self::siteColor($site['name'] ?? ''),
 				];
 			}
 		}
@@ -88,7 +89,8 @@ class Page implements IParkingmanagement
 
 		$headerCells = ['<th class="align-middle text-center bg-primary col-1">' . esc_html__('Number of days', 'parking-management') . '</th>'];
 		foreach ($columns as $column) {
-			$headerCells[] = '<th class="align-middle text-center bg-primary">' . esc_html($column['name'])
+			$style = 'background-color: ' . esc_attr($column['color']) . '; color: ' . esc_attr(self::readableTextColor($column['color'])) . ';';
+			$headerCells[] = '<th class="align-middle text-center" style="' . $style . '">' . esc_html($column['name'])
 				. '<br><small class="fw-normal">' . esc_html($column['type']) . '</small>'
 				. ($column['high_season'] ? '<br><small class="fw-normal">' . sprintf(esc_html__('+%s€ high season', 'parking-management'), $column['high_season']) . '</small>' : '')
 				. '</th>';
@@ -124,26 +126,82 @@ class Page implements IParkingmanagement
 
 	private function allOptions(): string
 	{
-		$blocks = [];
+		$perSite = [];
 		foreach ($this->sites as $site) {
 			$list = $this->optionsList($site['form']['options'] ?? []);
 			if (empty($list)) {
 				continue;
 			}
-			$blocks[] = Html::_div(
-				array('class' => 'col-12 mt-4'),
-				'<h4>' . esc_html($site['name'] ?? '') . '</h4>',
-				Html::_ul(array('class' => 'list-group list-group-flush'), ...$list)
+			$perSite[] = ['name' => $site['name'] ?? '', 'list' => $list];
+		}
+		if (empty($perSite)) {
+			return '';
+		}
+
+		// When every site offers the exact same options at the same prices, repeating
+		// the identical list once per site is just noise - show it a single time.
+		$distinct = array_unique(array_map(static fn($s) => serialize($s['list']), $perSite));
+		if (count($distinct) === 1 && count($perSite) > 1) {
+			return Html::_div(
+				array('class' => 'col-12 mt-5'),
+				'<h3 class="option">' . esc_html__('Options price', 'parking-management') . '</h3>',
+				Html::_ul(array('class' => 'list-group list-group-flush'), ...$perSite[0]['list'])
 			);
 		}
-		if (empty($blocks)) {
-			return '';
+
+		$blocks = [];
+		foreach ($perSite as $site) {
+			$blocks[] = Html::_div(
+				array('class' => 'col-12 mt-4'),
+				'<h4>' . esc_html($site['name']) . '</h4>',
+				Html::_ul(array('class' => 'list-group list-group-flush'), ...$site['list'])
+			);
 		}
 		return Html::_div(
 			array('class' => 'col-12 mt-5'),
 			'<h3 class="option">' . esc_html__('Options price', 'parking-management') . '</h3>',
 			...$blocks
 		);
+	}
+
+	/**
+	 * A stable color per site name, matching the palette already used site-wide in
+	 * parkineo's own admin (src/include/css/admin.css) so the same site reads the
+	 * same color everywhere. Falls back to a deterministic hash-based color for any
+	 * site name outside that known palette.
+	 */
+	private static function siteColor(string $name): string
+	{
+		$known = [
+			'orly' => '#62a3c3',
+			'roissy' => '#e97445',
+			'zaventem' => '#D000FF',
+			'coverpark' => 'green',
+			'dupont' => '#d4a017',
+		];
+		$key = strtolower(remove_accents($name));
+		$key = preg_replace('/[^a-z0-9]/', '', $key);
+		if (isset($known[$key])) {
+			return $known[$key];
+		}
+		$hue = hexdec(substr(md5($key), 0, 2)) / 255 * 360;
+		return "hsl({$hue}, 55%, 55%)";
+	}
+
+	/**
+	 * Picks black or white text for readable contrast against a given CSS color,
+	 * using the actual RGB for hex colors and a safe default for named/hsl colors.
+	 */
+	private static function readableTextColor(string $color): string
+	{
+		if (preg_match('/^#([0-9a-f]{6})$/i', $color, $m)) {
+			$r = hexdec(substr($m[1], 0, 2));
+			$g = hexdec(substr($m[1], 2, 2));
+			$b = hexdec(substr($m[1], 4, 2));
+			$luminance = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
+			return $luminance > 0.6 ? '#000' : '#fff';
+		}
+		return '#fff';
 	}
 
 	private function optionsList(array $options): array
