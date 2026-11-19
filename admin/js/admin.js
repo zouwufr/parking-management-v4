@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', function () {
 						<input type="checkbox" id="site-${id}-active" class="options-checkbox form-check-input" name="${name}[active]" value="1" checked>
 						<label class="form-check-label black" for="site-${id}-active">Active</label>
 					</div>
+					<input type="color" id="site-${id}-color" name="${name}[color]" class="form-control form-control-color ms-3" title="Color used to tell this site apart on the price table">
 					<i class="fas fa-trash delete-site ms-3" title="Remove"></i>
 				</div>
 				<div class="row">

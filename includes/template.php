@@ -261,6 +261,10 @@ class Template
 			'name' => '',
 			'active' => '1',
 
+			// Used to tell this site apart on the price comparison table (Price\Page).
+			// Left empty, that table falls back to a color guessed from the site name.
+			'color' => '',
+
 			// Legal identity: sites can be different legal companies (confirmed against
 			// the legacy parkineo app's per-site config), so this is per-site, not global.
 			'info' => array(
