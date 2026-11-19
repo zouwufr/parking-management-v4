@@ -101,6 +101,14 @@ class Order
 		$referer_host = array_key_exists('host', $referer) ? $referer['host'] : NULL;
 		$priceInstance = new Price($this->pm);
 		$price = $priceInstance->getPrice($this->data);
+		if (!isset($price['total'], $price['nb_jour'])) {
+			// getPrice() returns [] (no 'total'/'nb_jour' keys) when no tariff grid
+			// covers these dates - parkineo's own tbl_remplissage grid is now the only
+			// source of pricing, with no plugin-side fallback to fall back to. Refuse
+			// the booking instead of inserting an order with a NULL total/nb_jour.
+			Logger::error("order.create", ['message' => 'no price available for this site/vehicle/parking type/dates']);
+			throw new Exception(__("Pricing is currently unavailable for these dates. Please contact us.", 'parking-management'));
+		}
 
 		$payment = new Payment($this->pm);
 		$payment->setSite($this->site);
