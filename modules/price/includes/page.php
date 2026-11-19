@@ -63,7 +63,7 @@ class Page implements IParkingmanagement
 					'type' => $typeLabel,
 					'tariff' => $tariff,
 					'high_season' => $site['high_season']['price'] ?? 0,
-					'color' => self::siteColor($site['name'] ?? ''),
+					'color' => !empty($site['color']) ? $site['color'] : self::siteColor($site['name'] ?? ''),
 				];
 			}
 		}
@@ -165,10 +165,12 @@ class Page implements IParkingmanagement
 	}
 
 	/**
-	 * A stable color per site name, matching the palette already used site-wide in
-	 * parkineo's own admin (src/include/css/admin.css) so the same site reads the
-	 * same color everywhere. Falls back to a deterministic hash-based color for any
-	 * site name outside that known palette.
+	 * Fallback color for a site that hasn't set its own `color` field yet (see
+	 * Pages::_site_item() in the admin). Guesses from the palette already used
+	 * site-wide in parkineo's own admin (src/include/css/admin.css), matching by
+	 * substring since site names here are full marketing strings (e.g. "Parking
+	 * Du Pont - À 3mn des terminaux"), not the bare site name. Falls back further
+	 * to a deterministic hash-based color for any site name outside that palette.
 	 */
 	private static function siteColor(string $name): string
 	{
@@ -181,8 +183,10 @@ class Page implements IParkingmanagement
 		];
 		$key = strtolower(remove_accents($name));
 		$key = preg_replace('/[^a-z0-9]/', '', $key);
-		if (isset($known[$key])) {
-			return $known[$key];
+		foreach ($known as $needle => $color) {
+			if (str_contains($key, $needle)) {
+				return $color;
+			}
 		}
 		$hue = hexdec(substr(md5($key), 0, 2)) / 255 * 360;
 		return "hsl({$hue}, 55%, 55%)";
