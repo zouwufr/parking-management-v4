@@ -52,18 +52,46 @@ class Notification implements IShortcode
 
 	public function confirmation(array $data, Order $order, array $site): string
 	{
+		$tracking = '';
 		try {
 			$payment = new Payment($this->pm);
 			$payment->setSite($site);
 			$payment->setOrderId((int)$_GET['order_id']);
-			if (!$payment->updatePaymentStatus())
+			$paid_amount = null;
+			if (!$payment->updatePaymentStatus($paid_amount))
 				$order->confirmed((int)$_GET['order_id']);
+			if ($paid_amount !== null && $paid_amount > 0)
+				$tracking = $this->purchaseTracking((int)$_GET['order_id'], $paid_amount, $data['info_name']);
 			$this->mail($site, $data, esc_html__('Summary of your order', 'parking-management'), $site['mail_templates']['confirmation']['value']);
 			$this->sms($site, $data, $site['sms_template']);
 		} catch (Exception $e) {
 			Logger::error("notification.confirmation", $e->getMessage());
 		}
-		return '';
+		return $tracking;
+	}
+
+	/**
+	 * GTM purchase event (container loaded by the GTM4WP plugin), emitted only once
+	 * Stripe has confirmed the session as paid. transaction_id lets GA4/Ads
+	 * deduplicate page reloads.
+	 */
+	private function purchaseTracking(int $order_id, float $amount, string $item_name): string
+	{
+		$value = round($amount, 2);
+		$ecommerce = [
+			'transaction_id' => (string)$order_id,
+			'value' => $value,
+			'currency' => 'EUR',
+			'items' => [[
+				'item_name' => $item_name,
+				'price' => $value,
+				'quantity' => 1,
+			]],
+		];
+		$json = wp_json_encode($ecommerce, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_PRESERVE_ZERO_FRACTION);
+		if ($json === false)
+			return '';
+		return "<script>\nwindow.dataLayer = window.dataLayer || [];\ndataLayer.push({ ecommerce: null });\ndataLayer.push({ event: \"purchase\", ecommerce: {$json} });\n</script>";
 	}
 
 	private function cancellation(array $data, Order $order, array $site): string
