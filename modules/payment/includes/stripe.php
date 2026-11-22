@@ -49,8 +49,12 @@ class Stripe implements IPayment
 		exit(0);
 	}
 
-	public static function updatePaymentStatus($config, $order_id): bool
+	/**
+	 * @param float|null $paid_amount set to the amount Stripe confirmed as paid, null when not paid
+	 */
+	public static function updatePaymentStatus($config, $order_id, ?float &$paid_amount = null): bool
 	{
+		$paid_amount = null;
 		try {
 			$properties = $config['properties']['stripe'];
 			$session_id = isset($_GET['session_id']) ? sanitize_text_field($_GET['session_id']) : '';
@@ -87,6 +91,8 @@ class Stripe implements IPayment
 			$order = new Order();
 			$order->update_payment($order_id, date('Y-m-d H:i:s'), $amount, $payment_id);
 			Logger::info("stripe.updatePaymentStatus", "update payment status recorded");
+			if ($payment_id === PaymentID::STRIPE)
+				$paid_amount = (float)$amount;
 			return true;
 		} catch (Exception|ApiErrorException $e) {
 			$message = [

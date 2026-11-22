@@ -120,9 +120,13 @@ class Payment implements IShortcode, IParkingManagement
 		$this->setSite($site ?? Site::defaultSite() ?? []);
 	}
 
-	public function updatePaymentStatus(): bool
+	/**
+	 * @param float|null $paid_amount set to the amount the provider confirmed as paid, null otherwise
+	 */
+	public function updatePaymentStatus(?float &$paid_amount = null): bool
 	{
+		$paid_amount = null;
 		if ( ($this->provider !== 'stripe') || (empty($_GET['session_id']))) return false;
-		return Stripe::updatePaymentStatus($this->config, $this->order_id);
+		return Stripe::updatePaymentStatus($this->config, $this->order_id, $paid_amount);
 	}
 }
